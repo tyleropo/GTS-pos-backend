@@ -60,7 +60,7 @@ class AuthController
         ], 200);
     }
 
-    public function logout(Request $request) {
+    public function logoutUser(Request $request) {
         $request->user()->tokens()->delete();
         return response(204);
     }
@@ -73,7 +73,7 @@ class AuthController
         ->withCookie('auth__token', $token->plainTextToken, null, '/', null, false, true);
     }
 
-    public function updatePassword(Request $request) {
+    public function updateUserPassword(Request $request) {
         $validated = $request->validate([
             'current_password' => ['required', 'current_password'],
             'password' => ['required', Password::defaults(), 'confirmed']
