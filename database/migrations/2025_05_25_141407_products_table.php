@@ -18,6 +18,10 @@ return new class extends Migration
                 ->constrained('product_categories')
                 ->onUpdate('cascade')
                 ->onDelete('cascade');
+            $table->foreignId('product_brand')
+                ->constrained('product_brands')
+                ->onUpdate('cascade')
+                ->onDelete('cascade');
             $table->text('description');
             $table->text('specs');
             $table->decimal('price', 10, 2);
