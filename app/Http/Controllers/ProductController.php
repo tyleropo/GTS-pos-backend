@@ -11,26 +11,28 @@ class ProductController
      * Display a listing of the resource.
      */
     public function index(Request $request)
-    {
+    {   
+        $category = $request->query('category', null);
         $search = $request->query('search', null);
         $products = Product::with(['product_category', 'product_brand'])
-        ->where(function($query) use ($search) {
-            $query
-            ->where('name', 'LIKE', "%$search%")
-            ->orWhere('description', 'LIKE', "%$search%")
-            ->orWhere('specs', 'LIKE', "%$search%")
-            ->orWhereHas('product_category', function($q) use ($search) {
-                $q->where('name', 'LIKE', "%$search%");
-            })
-            ->orWhereHas('product_brand', function($q) use ($search) {
-                $q->where('name', 'LIKE', "%$search%");
+            ->where('product_category', 'LIKE', "%$category%")
+            ->where(function($query) use ($search) {
+                $query
+                ->where('name', 'LIKE', "%$search%")
+                ->orWhere('description', 'LIKE', "%$search%")
+                ->orWhere('specs', 'LIKE', "%$search%")
+                ->orWhereHas('product_category', function($q) use ($search) {
+                    $q->where('name', 'LIKE', "%$search%");
+                })
+                ->orWhereHas('product_brand', function($q) use ($search) {
+                    $q->where('name', 'LIKE', "%$search%");
+                });
+            })->get()->map(function($product) {
+                $product = $product->toArray();
+                $product['product_category'] =  $product['product_category']['name'];
+                $product['product_brand'] = $product['product_brand']['name'];
+                return $product;
             });
-        })->get()->map(function($product) {
-            $product = $product->toArray();
-            $product['product_category'] =  $product['product_category']['name'];
-            $product['product_brand'] = $product['product_brand']['name'];
-            return $product;
-        });
 
         return response()->json($products);
     }
