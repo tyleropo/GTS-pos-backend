@@ -22,8 +22,8 @@ return new class extends Migration
                 ->constrained('product_brands')
                 ->onUpdate('cascade')
                 ->onDelete('cascade');
-            $table->text('description');
-            $table->text('specs');
+            $table->text('description')->nullable();
+            $table->text('specs')->nullable();
             $table->decimal('price', 10, 2);
             $table->timestamps();
         });
