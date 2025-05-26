@@ -13,7 +13,7 @@ class AuthController
         $validated = $request->validate([
             'name' => 'required|max:255',
             'email' => 'required|email|unique:users',
-            'password' => ['required', 'string', 'min:8', 'regex:/[A-Z]/'],
+            'password' => ['required', 'string', 'min:8', 'regex:/[A-Z]/', 'confirmed'],
             'remember' => 'boolean',
         ]);
 
