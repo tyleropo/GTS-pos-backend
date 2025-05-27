@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use App\Models\ProductBrand;
+use App\Models\ProductCategory;
 use Illuminate\Http\Request;
 
 class ProductController
@@ -54,7 +56,7 @@ class ProductController
         return response()->json([
             'message' => "Product succesfully added",
             'product' => $product,
-        ], 201);
+        ], 204);
     }
 
     /**
@@ -102,4 +104,37 @@ class ProductController
     {
         //
     }
+
+    public function getCategoriesAndBrands() {
+        $categories = ProductCategory::pluck('name');
+        $brands = ProductBrand::pluck('name');
+
+       $data = [
+            'categories' => $categories,
+            'brands' => $brands
+        ];
+        
+        return response()->json($data);
+    }
+
+    public function createCategory(Request $request) {
+        $validated = $request->validate([
+            'name' => ['required', 'string']
+        ]);
+        ProductCategory::create($validated);
+        return response()->json([
+            'message' => "Category name successfully added",
+        ], 204);
+    }
+
+    public function createBrand(Request $request) {
+        $validated = $request->validate([
+            'name' => ['required', 'string']
+        ]);
+        ProductBrand::create($validated);
+        return response()->json([
+            'message' => "Brand name successfully added",
+        ], 204);
+    }
+
 }
