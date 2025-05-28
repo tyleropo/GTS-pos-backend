@@ -20,6 +20,7 @@ return new class extends Migration
             $table->string('stock_keeping_unit');
             $table->integer('stocks');
             $table->foreignId('supplier_id')
+                ->nullable()
                 ->constrained('suppliers')
                 ->onUpdate('cascade')
                 ->onDelete('cascade');
