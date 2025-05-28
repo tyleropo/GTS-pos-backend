@@ -14,12 +14,22 @@ class ProductController
      */
     public function index(Request $request)
     {   
-        $category = $request->query('category', null);
+        $brand = $request->query('brand', 'All');
+        $category = $request->query('category', 'All');
         $search = $request->query('search', null);
-        $products = Product::with(['product_category', 'product_brand'])
-            ->where('product_category', 'LIKE', "%$category%")
-            ->where(function($query) use ($search) {
-                $query
+
+        $query = Product::with(['product_category', 'product_brand']);
+        
+        if ($brand != 'All'){
+            $query->where('product_brand', 'LIKE', "%$brand%");
+        }
+        if ($category != 'All') {
+            $query->where('product_category', 'LIKE', "%$category%");
+        }
+
+        $products = $query
+            ->where(function($querySearch) use ($search) {
+                $querySearch
                 ->where('name', 'LIKE', "%$search%")
                 ->orWhere('description', 'LIKE', "%$search%")
                 ->orWhere('specs', 'LIKE', "%$search%")
@@ -106,8 +116,8 @@ class ProductController
     }
 
     public function getCategoriesAndBrands() {
-        $categories = ProductCategory::pluck('name');
-        $brands = ProductBrand::pluck('name');
+        $categories = ProductCategory::all();
+        $brands = ProductBrand::all();
 
        $data = [
             'categories' => $categories,

@@ -2,9 +2,9 @@
 
 namespace Database\Seeders;
 
-use App\Models\ProductBrand;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 
 class ProductBrandSeeder extends Seeder
 {
@@ -14,6 +14,7 @@ class ProductBrandSeeder extends Seeder
     public function run(): void
     {
         $brands = [
+            'All',
             'Sony',
             'Asus',
             'Samsung',
@@ -21,10 +22,8 @@ class ProductBrandSeeder extends Seeder
         ];
 
         foreach ($brands as $brand) {
-            ProductBrand::create([
+            DB::table('product_brands')->insert([
                 'name' => $brand,
-                'created_at' => now(),
-                'updated_at' => now(),
             ]);
         }
     }
