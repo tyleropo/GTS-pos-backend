@@ -32,7 +32,17 @@ class InventoryController
      */
     public function store(Request $request)
     {
-        //
+        $validated = $request->validate([
+            'product_id' => ['required', 'integer'],
+            'stock_keeping_unit' => ['required', 'string'],
+            'stocks' => ['requirede', 'integer'],
+            'supplier_id' => ['required', 'integer'],
+        ]);
+        $inventory = InventoryProduct::create($validated);
+        return response()->json([
+            'message' => "Inventory product succesfully added",
+            'product' => $inventory,
+        ], 204);
     }
 
     /**
@@ -40,7 +50,13 @@ class InventoryController
      */
     public function show(string $id)
     {
-        //
+        $inventory = InventoryProduct::with(['product', 'supplier'])
+           ->where('id', $id)
+           ->firstOrFail();
+        $inventory->product->makeHidden(['id', 'created_at', 'updated_at']);
+        $inventory->supplier->makeHidden(['id', 'created_at', 'updated_at']);
+        unset($inventory->product_id, $inventory->supplier_id);
+        return response()->json($inventory);
     }
 
     /**
