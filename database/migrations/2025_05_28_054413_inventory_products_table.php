@@ -13,20 +13,20 @@ return new class extends Migration
     {
         Schema::create('inventory_products', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('inventory_product')
+            $table->foreignId('product_id')
                 ->constrained('products')
                 ->onUpdate('cascade')
                 ->onDelete('cascade');
             $table->string('stock_keeping_unit');
             $table->integer('stocks');
-            $table->foreignId('inventory_supplier')
+            $table->foreignId('supplier_id')
                 ->nullable()
                 ->constrained('suppliers')
                 ->onUpdate('cascade')
                 ->onDelete('cascade');
             $table->timestamps();
 
-            $table->unique(['inventory_product', 'inventory_supplier']);
+            $table->unique(['product_id', 'supplier_id']);
         });
     }
 

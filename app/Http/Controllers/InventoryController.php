@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\InventoryProducts;
+use App\Models\InventoryProduct;
 use Illuminate\Http\Request;
 
 class InventoryController
@@ -12,24 +12,19 @@ class InventoryController
      */
     public function index(Request $request)
     {
-        $inventory_products = InventoryProducts::
-            with(
-                ['inventory_product', 
-                'inventory_supplier',
-                'inventory_product.product_category',
-                'inventory_product.product_brand'
-                ])
+        $inventories = InventoryProduct::with(['product', 'supplier'])
             ->get()
             ->map(function($inventory) {
                 $inventory = $inventory->toArray();
-                $inventory['product_category'] = $inventory['inventory_product']['product_category']['name'];
-                $inventory['product_brand'] = $inventory['inventory_product']['product_brand']['name'];
-                $inventory['inventory_product'] =  $inventory['inventory_product']['name'];
-                $inventory['inventory_supplier'] = $inventory['inventory_supplier']['name'];
+                $inventory['category'] = $inventory['product']['category'];
+                $inventory['brand'] = $inventory['product']['brand'];
+                $inventory['product'] =  $inventory['product']['name'];
+                $inventory['supplier'] = $inventory['supplier']['name'];
+                unset($inventory['product_id'], $inventory['supplier_id']);
                 return $inventory;
             });
 
-        return response()->json($inventory_products);
+        return response()->json($inventories);
     }
 
     /**
@@ -37,7 +32,17 @@ class InventoryController
      */
     public function store(Request $request)
     {
-        //
+        $validated = $request->validate([
+            'product_id' => ['required', 'integer'],
+            'stock_keeping_unit' => ['required', 'string'],
+            'stocks' => ['requirede', 'integer'],
+            'supplier_id' => ['required', 'integer'],
+        ]);
+        $inventory = InventoryProduct::create($validated);
+        return response()->json([
+            'message' => "Inventory product succesfully added",
+            'product' => $inventory,
+        ], 204);
     }
 
     /**
@@ -45,7 +50,13 @@ class InventoryController
      */
     public function show(string $id)
     {
-        //
+        $inventory = InventoryProduct::with(['product', 'supplier'])
+           ->where('id', $id)
+           ->firstOrFail();
+        $inventory->product->makeHidden(['id', 'created_at', 'updated_at']);
+        $inventory->supplier->makeHidden(['id', 'created_at', 'updated_at']);
+        unset($inventory->product_id, $inventory->supplier_id);
+        return response()->json($inventory);
     }
 
     /**

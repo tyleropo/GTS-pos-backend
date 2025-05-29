@@ -18,13 +18,13 @@ class ProductController
         $category = $request->query('category', 'All');
         $search = $request->query('search', null);
 
-        $query = Product::with(['product_category', 'product_brand']);
+        $query = Product::query();
         
         if ($brand != 'All'){
-            $query->where('product_brand', 'LIKE', "%$brand%");
+            $query->where('brand', $brand);
         }
         if ($category != 'All') {
-            $query->where('product_category', 'LIKE', "%$category%");
+            $query->where('category', $category);
         }
 
         $products = $query
@@ -33,16 +33,11 @@ class ProductController
                 ->where('name', 'LIKE', "%$search%")
                 ->orWhere('description', 'LIKE', "%$search%")
                 ->orWhere('specs', 'LIKE', "%$search%")
-                ->orWhereHas('product_category', function($q) use ($search) {
-                    $q->where('name', 'LIKE', "%$search%");
-                })
-                ->orWhereHas('product_brand', function($q) use ($search) {
-                    $q->where('name', 'LIKE', "%$search%");
-                });
+                ->orWhere('brand', 'LIKE', "%$search%")
+                ->orWhere('category', 'LIKE', "%$search%");
             })->get()->map(function($product) {
-                $product = $product->toArray();
-                $product['product_category'] =  $product['product_category']['name'];
-                $product['product_brand'] = $product['product_brand']['name'];
+                unset($product->created_at);
+                unset($product->updated_at);
                 return $product;
             });
 
@@ -56,8 +51,8 @@ class ProductController
     {
         $validated = $request->validate([
             'name' => ['required', 'string'],
-            'product_category' => ['required', 'integer'],
-            'product_brand' => ['required', 'integer'],
+            'category' => ['required', 'string'],
+            'brand' => ['nullable', 'string'],
             'description' => ['nullable', 'string'],
             'specs' => ['nullable', 'string'],
             'price' => ['required', 'decimal:2'],
@@ -74,14 +69,9 @@ class ProductController
      */
     public function show(string $id)
     {
-        $product = Product::with(['product_category', 'product_brand'])
-            ->where('id', $id)
-            ->firstOrFail();
-        $product = $product->toArray();
-        $product['category'] =  $product['product_category']['name'];
-        $product['brand'] = $product['product_brand']['name'];
-        unset($product['product_category'], $product['product_brand']);
-
+        $product = Product::where('id', $id)->firstOrFail();
+        unset($product->created_at);
+        unset($product->updated_at);
         return response()->json($product);
     }
 
@@ -92,8 +82,8 @@ class ProductController
     {
         $validated = $request->validate([
             'name' => ['required', 'string'],
-            'product_category' => ['required', 'integer'],
-            'product_brand' => ['required', 'integer'],
+            'category' => ['required', 'string'],
+            'brand' => ['nullable', 'string'],
             'description' => ['nullable', 'string'],
             'specs' => ['nullable', 'string'],
             'price' => ['required', 'decimal:2'],
@@ -115,11 +105,12 @@ class ProductController
         //
     }
 
-    public function getCategoriesAndBrands() {
+    public function getCategoriesAndBrands() 
+    {
         $categories = ProductCategory::all();
         $brands = ProductBrand::all();
 
-       $data = [
+        $data = [
             'categories' => $categories,
             'brands' => $brands
         ];
@@ -127,7 +118,8 @@ class ProductController
         return response()->json($data);
     }
 
-    public function createCategory(Request $request) {
+    public function createCategory(Request $request) 
+    {
         $validated = $request->validate([
             'name' => ['required', 'string']
         ]);
@@ -137,7 +129,8 @@ class ProductController
         ], 204);
     }
 
-    public function createBrand(Request $request) {
+    public function createBrand(Request $request) 
+    {
         $validated = $request->validate([
             'name' => ['required', 'string']
         ]);
