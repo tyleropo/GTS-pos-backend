@@ -16,9 +16,17 @@ return new class extends Migration
             $table->string('name');
             $table->string('category');
             $table->string('brand')->nullable();
+            $table->string('image')->nullable();
             $table->text('description')->nullable();
-            $table->text('specs')->nullable();
+            $table->string('stock_keeping_unit');
+            $table->integer('stocks');
+            $table->string('barcode')->nullable();
             $table->decimal('price', 10, 2);
+            $table->foreignId('supplier_id')
+                ->nullable()
+                ->constrained('suppliers')
+                ->onUpdate('cascade')
+                ->onDelete('cascade');
             $table->timestamps();
         });
     }

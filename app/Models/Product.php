@@ -10,8 +10,12 @@ class Product extends Model
         'name',
         'category',
         'brand',
+        'image',
         'description',
-        'specs',
+        'stock_keeping_unit',
+        'stocks',
+        'barcode',
         'price',
+        'supplier_id',
     ];
 }
