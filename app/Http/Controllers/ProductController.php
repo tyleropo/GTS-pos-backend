@@ -18,7 +18,7 @@ class ProductController
         $category = $request->query('category', 'All');
         $search = $request->query('search', null);
 
-        $query = Product::query();
+        $query = Product::with('supplier');
         
         if ($brand != 'All'){
             $query->where('brand', $brand);
@@ -27,15 +27,20 @@ class ProductController
             $query->where('category', $category);
         }
 
-        $products = $query
-            ->where(function($querySearch) use ($search) {
+        $products = $query->where(function($querySearch) use ($search) {
                 $querySearch
                 ->where('name', 'LIKE', "%$search%")
                 ->orWhere('description', 'LIKE', "%$search%")
-                ->orWhere('specs', 'LIKE', "%$search%")
                 ->orWhere('brand', 'LIKE', "%$search%")
-                ->orWhere('category', 'LIKE', "%$search%");
+                ->orWhere('category', 'LIKE', "%$search%")
+                ->orWhere('stock_keeping_unit', 'LIKE', "%$search%")
+                ->orWhere('barcode', 'LIKE', "%$search%")
+                ->orWhereHas('supplier', function($q) use ($search) {
+                    $q->where('name', 'LIKE', "%$search%");
+                });
             })->get()->map(function($product) {
+                $product->supplier->makeHidden(['id', 'created_at', 'updated_at']);
+                unset($product->supplier_id);
                 unset($product->created_at);
                 unset($product->updated_at);
                 return $product;
@@ -53,9 +58,13 @@ class ProductController
             'name' => ['required', 'string'],
             'category' => ['required', 'string'],
             'brand' => ['nullable', 'string'],
+            'image' => ['nullable', 'string'],
             'description' => ['nullable', 'string'],
-            'specs' => ['nullable', 'string'],
+            'barcode' => ['nullable', 'string'],
+            'stock_keeping_unit' => ['required', 'string'],
+            'stocks' => ['required', 'integer'],
             'price' => ['required', 'decimal:2'],
+            'supplier_id' => ['required', 'integer'],
         ]);
         $product = Product::create($validated);
         return response()->json([
@@ -69,9 +78,9 @@ class ProductController
      */
     public function show(string $id)
     {
-        $product = Product::where('id', $id)->firstOrFail();
-        unset($product->created_at);
-        unset($product->updated_at);
+        $product = Product::with('supplier')->where('id', $id)->firstOrFail();
+        $product->supplier->makeHidden(['id', 'created_at', 'updated_at']);
+        unset($product->supplier_id);
         return response()->json($product);
     }
 
@@ -84,9 +93,13 @@ class ProductController
             'name' => ['required', 'string'],
             'category' => ['required', 'string'],
             'brand' => ['nullable', 'string'],
+            'image' => ['nullable', 'string'],
             'description' => ['nullable', 'string'],
-            'specs' => ['nullable', 'string'],
+            'barcode' => ['nullable', 'string'],
+            'stock_keeping_unit' => ['required', 'string'],
+            'stocks' => ['required', 'integer'],
             'price' => ['required', 'decimal:2'],
+            'supplier_id' => ['required', 'integer'],
         ]);
         $product = Product::where('id', $id)->firstOrFail();
         $product->update($validated);
