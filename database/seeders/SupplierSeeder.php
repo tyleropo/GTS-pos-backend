@@ -18,18 +18,21 @@ class SupplierSeeder extends Seeder
             'name' => 'TechVendor Inc.',
             'place' => 'New York',
             'negotiator' => 'Bob Smith',
+            'contact' => 'tech@email.com'
         ]);
 
         Supplier::create([
             'name' => 'AudioTech Ltd.',
             'place' => 'Los Angeles',
             'negotiator' => 'Emily Brown',
+            'contact' => '09123456789'
         ]);
 
         Supplier::create([
             'name' => 'CompTech Systems',
             'place' => 'Chicago',
             'negotiator' => 'James Wilson',
+            'contact' => 'comp@email.com',
         ]);
     }
 }

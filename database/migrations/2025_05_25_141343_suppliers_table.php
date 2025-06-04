@@ -16,6 +16,7 @@ return new class extends Migration
             $table->string('name');
             $table->text('place');
             $table->string('negotiator')->nullable();
+            $table->string('contact')->nullable();
             $table->timestamps();
         });
     }
