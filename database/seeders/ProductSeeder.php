@@ -23,6 +23,7 @@ class ProductSeeder extends Seeder
                 'stocks' => 64,
                 'price' => 9256.78,
                 'supplier_id' => 1,
+                'barcode' => 'ABC123456',
             ],
             [
                 'name' => 'ASUS ROG Zephyrus G14 Laptop',
@@ -33,6 +34,7 @@ class ProductSeeder extends Seeder
                 'stock_keeping_unit' => 'WMS-009',
                 'stocks' => 4,
                 'supplier_id' => 3,
+                'barcode' => 'XYZ789012',
             ],
             [
                 'name' => 'Sony WH-1000XM5 Headphones',
@@ -43,6 +45,7 @@ class ProductSeeder extends Seeder
                 'stock_keeping_unit' => 'EHD-007',
                 'stocks' => 19,
                 'supplier_id' => 2,
+                'barcode' => 'LMN345678',
             ],
             [
                 'name' => 'Logitech MX Master 3S Mouse',
@@ -53,6 +56,7 @@ class ProductSeeder extends Seeder
                 'stock_keeping_unit' => 'BTS-004',
                 'stocks' => 37,
                 'supplier_id' => 1,
+                'barcode' => 'IOP746325',
             ],
         ];
 
