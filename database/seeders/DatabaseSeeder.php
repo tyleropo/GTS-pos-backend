@@ -10,10 +10,18 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        // Create users first
         $this->call(UserSeeder::class);
-        $this->call(ProductCategorySeeder::class);
-        $this->call(ProductBrandSeeder::class);
+        
+        // Dependencies
+        $this->call(CategorySeeder::class);
         $this->call(SupplierSeeder::class);
         $this->call(ProductSeeder::class);
+        $this->call(CustomerSeeder::class);
+        
+        // Transactions depend on products, customers, and users
+        $this->call(TransactionSeeder::class);
+        
+        $this->command->info('All seeders completed successfully!');
     }
 }

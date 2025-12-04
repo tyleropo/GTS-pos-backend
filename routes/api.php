@@ -1,7 +1,9 @@
 <?php
 
 require __DIR__ . '/api/authentications.php';
+require __DIR__ . '/api/categories-suppliers.php';
 require __DIR__ . '/api/customers.php';
+require __DIR__ . '/api/dashboard.php';
 require __DIR__ . '/api/products.php';
 require __DIR__ . '/api/purchase-orders.php';
 require __DIR__ . '/api/repairs.php';

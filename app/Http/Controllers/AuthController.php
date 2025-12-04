@@ -53,8 +53,21 @@ class AuthController
         $tokenExpiration = $request->remember ? null : now()->addDay();
         $token = $user->createToken($user->name, ['*'], $tokenExpiration);
 
+        // Transform user to match frontend schema
+        $userData = [
+            'id' => $user->id,
+            'email' => $user->email,
+            'first_name' => explode(' ', $user->name)[0] ?? 'Admin',
+            'last_name' => explode(' ', $user->name)[1] ?? 'User',
+            'role' => 'admin', // Default role since User model doesn't have role field yet
+            'is_active' => true,
+            'last_login_at' => $user->updated_at?->toISOString(),
+            'created_at' => $user->created_at?->toISOString(),
+            'updated_at' => $user->updated_at?->toISOString(),
+        ];
+
         return response([
-            'user' => $user,
+            'user' => $userData,
             'token' => $token->plainTextToken,
             'tokenExpiration' => $tokenExpiration,
         ], 200);
@@ -71,6 +84,24 @@ class AuthController
 
         return response(201)
         ->withCookie('auth__token', $token->plainTextToken, null, '/', null, false, true);
+    }
+
+
+    public function me(Request $request) {
+        $user = $request->user();
+        
+        // Transform user to match frontend schema
+        return response([
+            'id' => $user->id,
+            'email' => $user->email,
+            'first_name' => explode(' ', $user->name)[0] ?? 'Admin',
+            'last_name' => explode(' ', $user->name)[1] ?? 'User',
+            'role' => 'admin', // Default role since User model doesn't have role field yet
+            'is_active' => true,
+            'last_login_at' => $user->updated_at?->toISOString(),
+            'created_at' => $user->created_at?->toISOString(),
+            'updated_at' => $user->updated_at?->toISOString(),
+        ], 200);
     }
 
     public function updateUserPassword(Request $request) {
