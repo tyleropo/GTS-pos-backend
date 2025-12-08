@@ -14,12 +14,37 @@ class TransactionController extends Controller
 {
     public function index(Request $request)
     {
-        $transactions = Transaction::with('customer')
+        $transactions = Transaction::with(['customer', 'products'])
             ->when($request->date_from, fn ($q, $date) => $q->whereDate('created_at', '>=', $date))
             ->when($request->date_to, fn ($q, $date) => $q->whereDate('created_at', '<=', $date))
             ->when($request->payment_method, fn ($q, $method) => $q->paymentMethod($method))
             ->orderByDesc('created_at')
             ->paginate($request->integer('per_page', 50));
+
+        // Transform each transaction to include items from products relationship
+        $transactions->getCollection()->transform(function ($tx) {
+            $txArray = $tx->toArray();
+            
+            // Replace items array with transformed products
+            $txArray['items'] = $tx->products->map(function ($product) {
+                return [
+                    'product_id' => $product->id,
+                    'product_name' => $product->name,
+                    'quantity' => $product->pivot->quantity,
+                    'unit_price' => $product->pivot->unit_price,
+                    'discount' => $product->pivot->discount,
+                    'tax' => $product->pivot->tax,
+                    'line_total' => $product->pivot->line_total,
+                ];
+            })->toArray();
+            
+            // Ensure meta is an object, not null
+            if ($txArray['meta'] === null) {
+                $txArray['meta'] = new \stdClass();
+            }
+            
+            return $txArray;
+        });
 
         return response()->json($transactions);
     }
@@ -97,6 +122,28 @@ class TransactionController extends Controller
 
     public function show(Transaction $transaction)
     {
-        return response()->json($transaction->load(['customer', 'products']));
+        $transaction->load(['customer', 'products']);
+        
+        $txArray = $transaction->toArray();
+        
+        // Transform products into items array
+        $txArray['items'] = $transaction->products->map(function ($product) {
+            return [
+                'product_id' => $product->id,
+                'product_name' => $product->name,
+                'quantity' => $product->pivot->quantity,
+                'unit_price' => $product->pivot->unit_price,
+                'discount' => $product->pivot->discount,
+                'tax' => $product->pivot->tax,
+                'line_total' => $product->pivot->line_total,
+            ];
+        })->toArray();
+        
+        // Ensure meta is an object, not null
+        if ($txArray['meta'] === null) {
+            $txArray['meta'] = new \stdClass();
+        }
+        
+        return response()->json($txArray);
     }
 }

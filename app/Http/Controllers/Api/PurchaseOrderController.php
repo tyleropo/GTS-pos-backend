@@ -14,10 +14,35 @@ class PurchaseOrderController extends Controller
 {
     public function index(Request $request)
     {
-        $purchaseOrders = PurchaseOrder::with('supplier')
+        $purchaseOrders = PurchaseOrder::with(['supplier', 'products'])
             ->when($request->status, fn ($q, $status) => $q->status($status))
             ->orderByDesc('created_at')
             ->paginate($request->integer('per_page', 25));
+
+        // Transform each purchase order to include items from products relationship
+        $purchaseOrders->getCollection()->transform(function ($po) {
+            $poArray = $po->toArray();
+            
+            // Replace items array with transformed products
+            $poArray['items'] = $po->products->map(function ($product) {
+                return [
+                    'product_id' => $product->id,
+                    'product_name' => $product->name,
+                    'quantity_ordered' => $product->pivot->quantity_ordered,
+                    'quantity_received' => $product->pivot->quantity_received,
+                    'unit_cost' => $product->pivot->unit_cost,
+                    'tax' => $product->pivot->tax,
+                    'line_total' => $product->pivot->line_total,
+                ];
+            })->toArray();
+            
+            // Ensure meta is an object, not null
+            if ($poArray['meta'] === null) {
+                $poArray['meta'] = new \stdClass();
+            }
+            
+            return $poArray;
+        });
 
         return response()->json($purchaseOrders);
     }
@@ -73,7 +98,29 @@ class PurchaseOrderController extends Controller
 
     public function show(PurchaseOrder $purchaseOrder)
     {
-        return response()->json($purchaseOrder->load(['supplier', 'products']));
+        $purchaseOrder->load(['supplier', 'products']);
+        
+        $poArray = $purchaseOrder->toArray();
+        
+        // Transform products into items array
+        $poArray['items'] = $purchaseOrder->products->map(function ($product) {
+            return [
+                'product_id' => $product->id,
+                'product_name' => $product->name,
+                'quantity_ordered' => $product->pivot->quantity_ordered,
+                'quantity_received' => $product->pivot->quantity_received,
+                'unit_cost' => $product->pivot->unit_cost,
+                'tax' => $product->pivot->tax,
+                'line_total' => $product->pivot->line_total,
+            ];
+        })->toArray();
+        
+        // Ensure meta is an object, not null
+        if ($poArray['meta'] === null) {
+            $poArray['meta'] = new \stdClass();
+        }
+        
+        return response()->json($poArray);
     }
 
     public function update(Request $request, PurchaseOrder $purchaseOrder)
