@@ -12,8 +12,10 @@ class DatabaseSeeder extends Seeder
     {
         // Create test user first
         User::factory()->create([
-            'name' => 'Test User',
+            'first_name' => 'Test',
+            'last_name' => 'User',
             'email' => 'test@example.com',
+            'role' => 'admin',
         ]);
 
         // Seed POS data in correct order (respecting foreign key dependencies)
@@ -25,6 +27,7 @@ class DatabaseSeeder extends Seeder
             RepairSeeder::class,
             TransactionSeeder::class,
             PurchaseOrderSeeder::class,
+            UserSeeder::class,
         ]);
     }
 }
