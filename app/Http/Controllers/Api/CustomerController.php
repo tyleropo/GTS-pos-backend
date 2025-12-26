@@ -17,10 +17,11 @@ class CustomerController extends Controller
                     ->orWhere('phone', 'like', "%{$term}%")
                     ->orWhere('company', 'like', "%{$term}%");
             })
-            ->withCount(['transactions', 'repairs']);
+            ->withCount(['transactions', 'repairs'])
+            ->withSum('transactions as total_spent', 'total');
 
         return response()->json(
-            $query->orderBy('name')->paginate($request->integer('per_page', 25))
+            $query->orderBy('name')->orderBy('id')->paginate($request->integer('per_page', 25))
         );
     }
 
@@ -32,6 +33,8 @@ class CustomerController extends Controller
             'phone' => ['nullable', 'string'],
             'address' => ['nullable', 'string'],
             'company' => ['nullable', 'string'],
+            'status' => ['nullable', 'string', 'in:Active,Inactive,Archived'],
+            'type' => ['nullable', 'string'],
         ]);
 
         $customer = Customer::create($validated);
@@ -51,6 +54,8 @@ class CustomerController extends Controller
             'phone' => ['nullable', 'string'],
             'address' => ['nullable', 'string'],
             'company' => ['nullable', 'string'],
+            'status' => ['nullable', 'string', 'in:Active,Inactive,Archived'],
+            'type' => ['nullable', 'string'],
         ]);
 
         $customer->update($validated);
