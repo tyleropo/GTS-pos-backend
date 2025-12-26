@@ -11,13 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-       Schema::create('categories', function (Blueprint $table) {
-    $table->uuid('id')->primary();
-    $table->string('name')->unique();
-    $table->text('description')->nullable();
-    $table->foreignUuid('parent_id')->nullable()->constrained('categories')->nullOnDelete();
-    $table->timestamps();
-});
+        Schema::table('customers', function (Blueprint $table) {
+            $table->string('status')->default('Active');
+            $table->string('type')->default('Regular');
+        });
     }
 
     /**
@@ -25,6 +22,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('categories');
+        Schema::table('customers', function (Blueprint $table) {
+            $table->dropColumn(['status', 'type']);
+        });
     }
 };

@@ -11,24 +11,28 @@ class AuthController
 {
     public function registerUser (Request $request) {
         $validated = $request->validate([
-            'name' => 'required|max:255',
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
             'email' => 'required|email|unique:users',
             'password' => ['required', 'string', 'min:8', 'regex:/[A-Z]/', 'confirmed'],
+            'role' => 'sometimes|in:admin,manager,cashier,technician',
             'remember' => 'boolean',
         ]);
 
         try {
             $user = new User();
-            $user->name = $validated['name'];
+            $user->first_name = $validated['first_name'];
+            $user->last_name = $validated['last_name'];
             $user->email = $validated['email'];
             $user->password = $validated['password'];
+            $user->role = $validated['role'] ?? 'cashier';
             $user->save();
         } catch (\Throwable $error) {
             return response(['error' => 'Failed to register user', $error], 500);
         }
 
         $tokenExpiration = $request->remember ? null : now()->addDay();
-        $token = $user->createToken($user->name, ['*'], $tokenExpiration);
+        $token = $user->createToken($user->first_name . ' ' . $user->last_name, ['*'], $tokenExpiration);
 
         return response([
             'user' => $user,
@@ -50,8 +54,12 @@ class AuthController
             return response(['message' => "Incorrect credentials"],401);
         }
 
+        // Update last login timestamp
+        $user->last_login_at = now();
+        $user->save();
+
         $tokenExpiration = $request->remember ? null : now()->addDay();
-        $token = $user->createToken($user->name, ['*'], $tokenExpiration);
+        $token = $user->createToken($user->first_name . ' ' . $user->last_name, ['*'], $tokenExpiration);
 
         return response([
             'user' => $user,
@@ -71,6 +79,11 @@ class AuthController
 
         return response(201)
         ->withCookie('auth__token', $token->plainTextToken, null, '/', null, false, true);
+    }
+
+
+    public function getCurrentUser(Request $request) {
+        return response($request->user(), 200);
     }
 
     public function updateUserPassword(Request $request) {

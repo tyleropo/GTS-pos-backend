@@ -9,6 +9,7 @@ Route::controller(AuthController::class)->group(function () {
 });
 
 Route::middleware('auth:sanctum')->controller(AuthController::class)->group(function () {
+    Route::get('/me', 'getCurrentUser');
     Route::post('/logout', 'logoutUser');
     Route::post('/refresh', 'refresh');
     Route::put('/update-password', 'updateUserPassword');

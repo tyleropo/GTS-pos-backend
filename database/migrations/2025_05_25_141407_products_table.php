@@ -11,24 +11,32 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('products', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->string('category');
-            $table->string('brand')->nullable();
-            $table->string('image')->nullable();
-            $table->text('description')->nullable();
-            $table->string('stock_keeping_unit');
-            $table->integer('stocks');
-            $table->string('barcode')->nullable();
-            $table->decimal('price', 10, 2);
-            $table->foreignId('supplier_id')
-                ->nullable()
-                ->constrained('suppliers')
-                ->onUpdate('cascade')
-                ->onDelete('cascade');
-            $table->timestamps();
-        });
+       Schema::create('products', function (Blueprint $table) {
+    $table->uuid('id')->primary();
+    $table->string('sku')->unique();
+    $table->string('barcode')->nullable()->unique();
+    $table->string('name');
+    $table->text('description')->nullable();
+    $table->foreignUuid('category_id')->nullable()->constrained()->nullOnDelete();
+    $table->foreignUuid('supplier_id')->nullable()->constrained()->nullOnDelete();
+    $table->string('brand')->nullable();
+    $table->string('model')->nullable();
+    $table->decimal('cost_price', 12, 2)->default(0);
+    $table->decimal('selling_price', 12, 2)->default(0);
+    $table->decimal('markup_percentage', 6, 2)->nullable();
+    $table->decimal('tax_rate', 5, 2)->nullable();
+    $table->integer('stock_quantity')->default(0);
+    $table->integer('reorder_level')->default(0);
+    $table->integer('max_stock_level')->nullable();
+    $table->string('unit_of_measure')->nullable();
+    $table->decimal('weight', 8, 2)->nullable();
+    $table->string('dimensions')->nullable();
+    $table->string('image_url')->nullable();
+    $table->boolean('is_active')->default(true);
+    $table->boolean('is_serialized')->default(false);
+    $table->integer('warranty_period')->nullable();
+    $table->timestamps();
+});
     }
 
     /**
@@ -36,6 +44,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        //
+        Schema::dropIfExists('products');
     }
 };

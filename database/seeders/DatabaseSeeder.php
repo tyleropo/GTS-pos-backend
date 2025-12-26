@@ -10,10 +10,24 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        $this->call(UserSeeder::class);
-        $this->call(ProductCategorySeeder::class);
-        $this->call(ProductBrandSeeder::class);
-        $this->call(SupplierSeeder::class);
-        $this->call(ProductSeeder::class);
+        // Create test user first
+        User::factory()->create([
+            'first_name' => 'Test',
+            'last_name' => 'User',
+            'email' => 'test@example.com',
+            'role' => 'admin',
+        ]);
+
+        // Seed POS data in correct order (respecting foreign key dependencies)
+        $this->call([
+            CategorySeeder::class,
+            SupplierSeeder::class,
+            ProductSeeder::class,
+            CustomerSeeder::class,
+            RepairSeeder::class,
+            TransactionSeeder::class,
+            PurchaseOrderSeeder::class,
+            UserSeeder::class,
+        ]);
     }
 }
