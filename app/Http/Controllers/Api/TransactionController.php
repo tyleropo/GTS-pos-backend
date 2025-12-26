@@ -72,7 +72,7 @@ class TransactionController extends Controller
 
             // Create transaction
             $transaction = Transaction::create([
-                'invoice_number' => 'INV-' . now()->format('Ymd') . '-' . strtoupper(Str::random(6)),
+                'invoice_number' => 'TXN-' . now()->format('Ymd-Hi') . '-' . strtoupper(Str::random(4)),
                 'customer_id' => $validated['customer_id'] ?? null,
                 'subtotal' => $validated['subtotal'],
                 'tax' => $validated['tax'],
