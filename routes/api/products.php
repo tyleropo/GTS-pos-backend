@@ -10,10 +10,11 @@ Route::middleware('auth:sanctum')->group(function() {
   Route::delete('/products/delete-image', [App\Http\Controllers\Api\ProductImageController::class, 'delete']);
   Route::apiResource('products', App\Http\Controllers\Api\ProductController::class);
   
-  Route::prefix('/product_')->controller(ProductController::class)->group(function() {
-    Route::get('/categories_brands', 'getCategoriesAndBrands');
-    Route::post('/category', 'createCategory');
-    Route::post('/brand', 'createBrand');
+  Route::prefix('/product_')->group(function() {
+    Route::get('/categories_brands', [ProductController::class, 'getCategoriesAndBrands']);
+    Route::post('/brand', [ProductController::class, 'createBrand']);
   });
+
+  Route::post('/products/categories', [App\Http\Controllers\Api\ProductController::class, 'createCategory']);
 });
 

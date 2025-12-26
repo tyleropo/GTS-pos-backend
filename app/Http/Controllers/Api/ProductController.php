@@ -110,4 +110,16 @@ class ProductController extends Controller
             'user_id' => auth()->id(),
         ]);
     }
+
+    public function createCategory(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255', 'unique:categories,name'],
+            'description' => ['nullable', 'string'],
+        ]);
+
+        $category = \App\Models\Category::create($validated);
+
+        return response()->json($category, 201);
+    }
 }
