@@ -28,13 +28,8 @@ class Product extends Model
         'stock_quantity',
         'reorder_level',
         'max_stock_level',
-        'unit_of_measure',
-        'weight',
-        'dimensions',
         'image_url',
         'is_active',
-        'is_serialized',
-        'warranty_period',
     ];
 
     protected $casts = [
@@ -42,13 +37,10 @@ class Product extends Model
         'selling_price' => 'decimal:2',
         'markup_percentage' => 'decimal:2',
         'tax_rate' => 'decimal:2',
-        'weight' => 'decimal:2',
         'stock_quantity' => 'integer',
         'reorder_level' => 'integer',
         'max_stock_level' => 'integer',
-        'warranty_period' => 'integer',
         'is_active' => 'boolean',
-        'is_serialized' => 'boolean',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
