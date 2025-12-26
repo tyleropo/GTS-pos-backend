@@ -27,6 +27,16 @@ class ProductController extends Controller
         return response()->json($products);
     }
 
+    public function getCategories()
+    {
+        return response()->json(\App\Models\Category::all());
+    }
+
+    public function getLowStock()
+    {
+        return response()->json(Product::lowStock()->with(['category', 'supplier'])->get());
+    }
+
     public function store(Request $request)
     {
         $validated = $this->validatePayload($request);
