@@ -18,6 +18,12 @@ class TransactionController extends Controller
             ->when($request->date_from, fn ($q, $date) => $q->whereDate('created_at', '>=', $date))
             ->when($request->date_to, fn ($q, $date) => $q->whereDate('created_at', '<=', $date))
             ->when($request->payment_method, fn ($q, $method) => $q->paymentMethod($method))
+            ->when($request->customer_id, fn ($q, $id) => $q->where('customer_id', $id))
+            ->when($request->customer_ids, function ($q, $ids) {
+                // Determine if ids is an array or string
+                $idList = is_array($ids) ? $ids : explode(',', $ids);
+                $q->whereIn('customer_id', $idList);
+            })
             ->orderByDesc('created_at')
             ->paginate($request->integer('per_page', 50));
 
