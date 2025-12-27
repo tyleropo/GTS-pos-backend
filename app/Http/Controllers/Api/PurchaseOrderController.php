@@ -14,7 +14,7 @@ class PurchaseOrderController extends Controller
 {
     public function index(Request $request)
     {
-        $purchaseOrders = PurchaseOrder::with(['supplier', 'products'])
+        $purchaseOrders = PurchaseOrder::with(['customer', 'products'])
             ->when($request->status, fn ($q, $status) => $q->status($status))
             ->orderByDesc('created_at')
             ->paginate($request->integer('per_page', 25));
@@ -33,6 +33,7 @@ class PurchaseOrderController extends Controller
                     'unit_cost' => $product->pivot->unit_cost,
                     'tax' => $product->pivot->tax,
                     'line_total' => $product->pivot->line_total,
+                    'description' => $product->pivot->description,
                 ];
             })->toArray();
             
@@ -50,17 +51,20 @@ class PurchaseOrderController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'supplier_id' => ['required', 'uuid', 'exists:suppliers,id'],
+            'supplier_id' => ['required', 'uuid', 'exists:customers,id'],
             'expected_at' => ['nullable', 'date'],
+            'status' => ['nullable', 'string', 'in:draft,submitted,received,cancelled'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'uuid', 'exists:products,id'],
             'items.*.quantity_ordered' => ['required', 'integer', 'min:1'],
             'items.*.unit_cost' => ['required', 'numeric', 'min:0'],
             'items.*.tax' => ['nullable', 'numeric', 'min:0'],
             'items.*.line_total' => ['required', 'numeric', 'min:0'],
+            'items.*.description' => ['nullable', 'string'],
             'subtotal' => ['required', 'numeric', 'min:0'],
             'tax' => ['required', 'numeric', 'min:0'],
             'total' => ['required', 'numeric', 'min:0'],
+            'notes' => ['nullable', 'string'],
             'meta' => ['nullable', 'array'],
         ]);
 
@@ -70,11 +74,12 @@ class PurchaseOrderController extends Controller
             $po = PurchaseOrder::create([
                 'po_number' => 'PO-' . now()->format('Ymd') . '-' . strtoupper(Str::random(6)),
                 'supplier_id' => $validated['supplier_id'],
-                'status' => 'draft',
+                'status' => $validated['status'] ?? 'draft',
                 'expected_at' => $validated['expected_at'] ?? null,
                 'subtotal' => $validated['subtotal'],
                 'tax' => $validated['tax'],
                 'total' => $validated['total'],
+                'notes' => $validated['notes'] ?? null,
                 'items' => $items->toArray(),
                 'meta' => $validated['meta'] ?? [],
             ]);
@@ -87,18 +92,19 @@ class PurchaseOrderController extends Controller
                     'unit_cost' => $item['unit_cost'],
                     'tax' => $item['tax'] ?? 0,
                     'line_total' => $item['line_total'],
+                    'description' => $item['description'] ?? null,
                 ]);
             }
 
             return $po;
         });
 
-        return response()->json($po->load('supplier', 'products'), 201);
+        return response()->json($po->load('customer', 'products'), 201);
     }
 
     public function show(PurchaseOrder $purchaseOrder)
     {
-        $purchaseOrder->load(['supplier', 'products']);
+        $purchaseOrder->load(['customer', 'products']);
         
         $poArray = $purchaseOrder->toArray();
         
@@ -112,6 +118,7 @@ class PurchaseOrderController extends Controller
                 'unit_cost' => $product->pivot->unit_cost,
                 'tax' => $product->pivot->tax,
                 'line_total' => $product->pivot->line_total,
+                'description' => $product->pivot->description,
             ];
         })->toArray();
         
@@ -126,12 +133,50 @@ class PurchaseOrderController extends Controller
     public function update(Request $request, PurchaseOrder $purchaseOrder)
     {
         $validated = $request->validate([
-            'status' => ['sometimes', 'in:draft,submitted,received,cancelled'],
-            'expected_at' => ['nullable', 'date'],
+            'supplier_id' => 'required|exists:customers,id',
+            'status' => 'required|in:draft,submitted,received,cancelled',
+            'expected_at' => 'nullable|date',
+            'subtotal' => 'required|numeric',
+            'tax' => 'required|numeric',
+            'total' => 'required|numeric',
+            'notes' => 'nullable|string',
+            'items' => 'required|array',
+            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.quantity_ordered' => 'required|integer|min:1',
+            'items.*.unit_cost' => 'required|numeric|min:0',
+            'items.*.description' => 'nullable|string',
         ]);
 
-        $purchaseOrder->update($validated);
-        return response()->json($purchaseOrder->fresh()->load('supplier'));
+        $updatedPurchaseOrder = DB::transaction(function () use ($validated, $purchaseOrder) {
+            $purchaseOrder->update([
+                'supplier_id' => $validated['supplier_id'],
+                'status' => $validated['status'],
+                'expected_at' => $validated['expected_at'] ?? null,
+                'subtotal' => $validated['subtotal'],
+                'tax' => $validated['tax'],
+                'total' => $validated['total'],
+                'notes' => $validated['notes'] ?? null,
+            ]);
+
+            $existingProducts = $purchaseOrder->products->keyBy('id');
+            $syncData = [];
+            foreach ($validated['items'] as $item) {
+                $existingPivot = $existingProducts->get($item['product_id'])?->pivot;
+                $syncData[$item['product_id']] = [
+                    'quantity_ordered' => $item['quantity_ordered'],
+                    'unit_cost' => $item['unit_cost'],
+                    'line_total' => $item['quantity_ordered'] * $item['unit_cost'], // Recalculate or trust frontend? Trust frontend for now but ideally re-calc
+                    'description' => $item['description'] ?? null,
+                    'quantity_received' => $existingPivot ? $existingPivot->quantity_received : 0,
+                ];
+            }
+            
+            $purchaseOrder->products()->sync($syncData);
+
+            return $purchaseOrder->fresh(['products', 'customer']); // Return fresh customer data too
+        });
+
+        return response()->json($updatedPurchaseOrder);
     }
 
     public function receive(Request $request, PurchaseOrder $purchaseOrder)
@@ -181,7 +226,7 @@ class PurchaseOrderController extends Controller
             }
         });
 
-        return response()->json($purchaseOrder->fresh()->load('supplier', 'products'));
+        return response()->json($purchaseOrder->fresh()->load('customer', 'products'));
     }
 
     public function destroy(PurchaseOrder $purchaseOrder)
