@@ -117,4 +117,42 @@ class DashboardController extends Controller
 
         return response()->json($repairs);
     }
+
+    public function calendarEvents()
+    {
+        // Get PO delivery dates (non-cancelled, with expected_at)
+        $poEvents = \App\Models\PurchaseOrder::with('customer')
+            ->whereNotNull('expected_at')
+            ->whereNotIn('status', ['cancelled'])
+            ->get()
+            ->map(fn ($po) => [
+                'id' => 'po-' . $po->id,
+                'title' => $po->po_number . ' - ' . ($po->customer?->company ?? $po->customer?->name ?? 'Unknown'),
+                'start' => $po->expected_at->format('Y-m-d'),
+                'color' => $po->status === 'received' ? '#22c55e' : '#3b82f6', // green if received, blue otherwise
+                'extendedProps' => [
+                    'type' => 'po',
+                    'id' => $po->id,
+                    'status' => $po->status,
+                ],
+            ]);
+
+        // Get Repair completion dates (non-completed, non-cancelled, with promised_at)
+        $repairEvents = Repair::with('customer')
+            ->whereNotNull('promised_at')
+            ->get()
+            ->map(fn ($r) => [
+                'id' => 'repair-' . $r->id,
+                'title' => $r->ticket_number . ' - ' . ($r->customer?->name ?? 'Walk-in'),
+                'start' => $r->promised_at->format('Y-m-d'),
+                'color' => $r->status === 'completed' ? '#22c55e' : '#f97316', // green if completed, orange otherwise
+                'extendedProps' => [
+                    'type' => 'repair',
+                    'id' => $r->id,
+                    'status' => $r->status,
+                ],
+            ]);
+
+        return response()->json($poEvents->merge($repairEvents)->values());
+    }
 }
