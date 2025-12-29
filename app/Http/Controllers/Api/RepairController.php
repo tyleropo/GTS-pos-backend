@@ -26,13 +26,17 @@ class RepairController extends Controller
         $validated = $request->validate([
             'customer_id' => ['nullable', 'uuid', 'exists:customers,id'],
             'device' => ['required', 'string'],
+            'device_model' => ['nullable', 'string'],
             'serial_number' => ['nullable', 'string'],
             'issue_description' => ['required', 'string'],
+            'cost' => ['nullable', 'numeric', 'min:0'],
+            'technician' => ['nullable', 'string'],
             'promised_at' => ['nullable', 'date'],
         ]);
 
         $validated['ticket_number'] = 'REP-' . now()->format('Ymd') . '-' . strtoupper(Str::random(6));
         $validated['status'] = 'pending';
+        $validated['cost'] = $validated['cost'] ?? 0;
 
         $repair = Repair::create($validated);
         return response()->json($repair->load('customer'), 201);
@@ -46,8 +50,15 @@ class RepairController extends Controller
     public function update(Request $request, Repair $repair)
     {
         $validated = $request->validate([
+            'customer_id' => ['sometimes', 'nullable', 'uuid', 'exists:customers,id'],
+            'device' => ['sometimes', 'string'],
+            'device_model' => ['sometimes', 'nullable', 'string'],
+            'serial_number' => ['sometimes', 'nullable', 'string'],
+            'issue_description' => ['sometimes', 'string'],
             'status' => ['sometimes', 'in:pending,in_progress,completed,cancelled'],
             'resolution' => ['nullable', 'string'],
+            'cost' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'technician' => ['sometimes', 'nullable', 'string'],
             'promised_at' => ['nullable', 'date'],
         ]);
 

@@ -22,6 +22,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('low-stock', [DashboardController::class, 'lowStock']);
         Route::get('top-selling', [DashboardController::class, 'topSelling']);
         Route::get('pending-repairs', [DashboardController::class, 'pendingRepairs']);
+        Route::get('calendar-events', [DashboardController::class, 'calendarEvents']);
     });
 
     // Products

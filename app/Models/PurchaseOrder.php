@@ -19,6 +19,7 @@ class PurchaseOrder extends Model
         'subtotal',
         'tax',
         'total',
+        'notes',
         'items',
         'meta',
     ];
@@ -35,11 +36,20 @@ class PurchaseOrder extends Model
     ];
 
     /**
-     * Get the supplier for this purchase order
+     * Get the customer for this purchase order
+     * (Stored in supplier_id column)
+     */
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'supplier_id');
+    }
+
+    /**
+     * Get the supplier (Legacy alias for customer)
      */
     public function supplier(): BelongsTo
     {
-        return $this->belongsTo(Supplier::class);
+        return $this->belongsTo(Customer::class, 'supplier_id');
     }
 
     /**
@@ -48,7 +58,7 @@ class PurchaseOrder extends Model
     public function products(): BelongsToMany
     {
         return $this->belongsToMany(Product::class, 'product_purchase_order')
-            ->withPivot('quantity_ordered', 'quantity_received', 'unit_cost', 'tax', 'line_total')
+            ->withPivot('quantity_ordered', 'quantity_received', 'unit_cost', 'tax', 'line_total', 'description')
             ->withTimestamps();
     }
 

@@ -18,10 +18,12 @@ class DashboardController extends Controller
             ? (($todayRevenue - $yesterdayRevenue) / $yesterdayRevenue) * 100 
             : 0;
 
+        $todayTransactions = Transaction::whereDate('created_at', today())->count();
         $totalProducts = Product::active()->count();
         $lowStockCount = Product::lowStock()->count();
         $outOfStockCount = Product::outOfStock()->count();
         $pendingRepairs = Repair::pending()->count();
+        $inProgressRepairs = Repair::where('status', 'in_progress')->count();
 
         return response()->json([
             [
@@ -29,21 +31,33 @@ class DashboardController extends Controller
                 'value' => '₱' . number_format($todayRevenue, 2),
                 'trend' => $revenueTrend >= 0 ? 'up' : 'down',
                 'percentage' => abs(round($revenueTrend, 1)),
+                'hint' => $todayTransactions . ' transactions today',
+                'icon' => 'revenue',
+                'href' => '/transactions',
             ],
             [
                 'title' => 'Total Products',
                 'value' => $totalProducts,
                 'trend' => 'neutral',
+                'hint' => $outOfStockCount > 0 ? $outOfStockCount . ' out of stock' : 'All products in stock',
+                'icon' => 'products',
+                'href' => '/inventory',
             ],
             [
                 'title' => 'Low Stock Items',
                 'value' => $lowStockCount,
                 'trend' => $lowStockCount > 0 ? 'down' : 'up',
+                'hint' => $lowStockCount > 0 ? 'Needs restocking' : 'Stock levels healthy',
+                'icon' => 'low-stock',
+                'href' => '/inventory?filter=low-stock',
             ],
             [
                 'title' => 'Pending Repairs',
                 'value' => $pendingRepairs,
                 'trend' => 'neutral',
+                'hint' => $inProgressRepairs . ' in progress',
+                'icon' => 'repairs',
+                'href' => '/repairs',
             ],
         ]);
     }
@@ -116,5 +130,43 @@ class DashboardController extends Controller
             ->get();
 
         return response()->json($repairs);
+    }
+
+    public function calendarEvents()
+    {
+        // Get PO delivery dates (non-cancelled, with expected_at)
+        $poEvents = \App\Models\PurchaseOrder::with('customer')
+            ->whereNotNull('expected_at')
+            ->whereNotIn('status', ['cancelled'])
+            ->get()
+            ->map(fn ($po) => [
+                'id' => 'po-' . $po->id,
+                'title' => $po->po_number . ' - ' . ($po->customer?->company ?? $po->customer?->name ?? 'Unknown'),
+                'start' => $po->expected_at->format('Y-m-d'),
+                'color' => $po->status === 'received' ? '#22c55e' : '#3b82f6', // green if received, blue otherwise
+                'extendedProps' => [
+                    'type' => 'po',
+                    'id' => $po->id,
+                    'status' => $po->status,
+                ],
+            ]);
+
+        // Get Repair completion dates (non-completed, non-cancelled, with promised_at)
+        $repairEvents = Repair::with('customer')
+            ->whereNotNull('promised_at')
+            ->get()
+            ->map(fn ($r) => [
+                'id' => 'repair-' . $r->id,
+                'title' => $r->ticket_number . ' - ' . ($r->customer?->name ?? 'Walk-in'),
+                'start' => $r->promised_at->format('Y-m-d'),
+                'color' => $r->status === 'completed' ? '#22c55e' : '#f97316', // green if completed, orange otherwise
+                'extendedProps' => [
+                    'type' => 'repair',
+                    'id' => $r->id,
+                    'status' => $r->status,
+                ],
+            ]);
+
+        return response()->json($poEvents->merge($repairEvents)->values());
     }
 }

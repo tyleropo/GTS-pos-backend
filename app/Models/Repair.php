@@ -14,10 +14,13 @@ class Repair extends Model
         'ticket_number',
         'customer_id',
         'device',
+        'device_model',
         'serial_number',
         'status',
         'issue_description',
         'resolution',
+        'cost',
+        'technician',
         'promised_at',
     ];
 
