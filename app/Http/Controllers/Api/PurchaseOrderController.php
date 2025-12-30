@@ -14,7 +14,7 @@ class PurchaseOrderController extends Controller
 {
     public function index(Request $request)
     {
-        $purchaseOrders = PurchaseOrder::with(['customer', 'products'])
+        $purchaseOrders = PurchaseOrder::with(['customer', 'products', 'payments'])
             ->when($request->status, fn ($q, $status) => $q->status($status))
             ->orderByDesc('created_at')
             ->paginate($request->integer('per_page', 25));
@@ -54,6 +54,7 @@ class PurchaseOrderController extends Controller
             'supplier_id' => ['required', 'uuid', 'exists:customers,id'],
             'expected_at' => ['nullable', 'date'],
             'status' => ['nullable', 'string', 'in:draft,submitted,received,cancelled'],
+            'payment_status' => ['nullable', 'string', 'in:pending,paid'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'uuid', 'exists:products,id'],
             'items.*.quantity_ordered' => ['required', 'integer', 'min:1'],
@@ -75,6 +76,7 @@ class PurchaseOrderController extends Controller
                 'po_number' => 'PO-' . now()->format('Ymd') . '-' . strtoupper(Str::random(6)),
                 'supplier_id' => $validated['supplier_id'],
                 'status' => $validated['status'] ?? 'draft',
+                'payment_status' => $validated['payment_status'] ?? 'pending',
                 'expected_at' => $validated['expected_at'] ?? null,
                 'subtotal' => $validated['subtotal'],
                 'tax' => $validated['tax'],
@@ -104,7 +106,7 @@ class PurchaseOrderController extends Controller
 
     public function show(PurchaseOrder $purchaseOrder)
     {
-        $purchaseOrder->load(['customer', 'products']);
+        $purchaseOrder->load(['customer', 'products', 'payments']);
         
         $poArray = $purchaseOrder->toArray();
         
@@ -134,7 +136,8 @@ class PurchaseOrderController extends Controller
     {
         $validated = $request->validate([
             'supplier_id' => 'required|exists:customers,id',
-            'status' => 'required|in:draft,submitted,received,cancelled',
+            'status' => 'required|string|in:draft,submitted,received,cancelled',
+            'payment_status' => 'nullable|string|in:pending,paid',
             'expected_at' => 'nullable|date',
             'subtotal' => 'required|numeric',
             'tax' => 'required|numeric',
@@ -151,6 +154,7 @@ class PurchaseOrderController extends Controller
             $purchaseOrder->update([
                 'supplier_id' => $validated['supplier_id'],
                 'status' => $validated['status'],
+                'payment_status' => $validated['payment_status'] ?? 'pending',
                 'expected_at' => $validated['expected_at'] ?? null,
                 'subtotal' => $validated['subtotal'],
                 'tax' => $validated['tax'],

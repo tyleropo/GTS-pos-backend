@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PurchaseOrder extends Model
 {
@@ -15,6 +16,7 @@ class PurchaseOrder extends Model
         'po_number',
         'supplier_id',
         'status',
+        'payment_status',
         'expected_at',
         'subtotal',
         'tax',
@@ -60,6 +62,14 @@ class PurchaseOrder extends Model
         return $this->belongsToMany(Product::class, 'product_purchase_order')
             ->withPivot('quantity_ordered', 'quantity_received', 'unit_cost', 'tax', 'line_total', 'description')
             ->withTimestamps();
+    }
+
+    /**
+     * Get all payments for this purchase order
+     */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
     }
 
     /**
