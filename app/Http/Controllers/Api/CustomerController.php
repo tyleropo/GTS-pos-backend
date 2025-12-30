@@ -11,7 +11,7 @@ class CustomerController extends Controller
     public function types()
     {
         // Get generic types that are often used but might not be in DB yet
-        $defaultTypes = collect(['Regular', 'VIP']);
+        $defaultTypes = collect(['Regular', 'VIP', 'Government']);
         
         // Get types from DB
         $dbTypes = Customer::select('type')
