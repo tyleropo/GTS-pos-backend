@@ -8,6 +8,24 @@ use Illuminate\Http\Request;
 
 class CustomerController extends Controller
 {
+    public function types()
+    {
+        // Get generic types that are often used but might not be in DB yet
+        $defaultTypes = collect(['Regular', 'VIP']);
+        
+        // Get types from DB
+        $dbTypes = Customer::select('type')
+            ->distinct()
+            ->whereNotNull('type')
+            ->where('type', '!=', '')
+            ->pluck('type');
+
+        // Merge and sort
+        $allTypes = $defaultTypes->merge($dbTypes)->unique()->sort()->values();
+
+        return response()->json($allTypes);
+    }
+
     public function index(Request $request)
     {
         $query = Customer::query()

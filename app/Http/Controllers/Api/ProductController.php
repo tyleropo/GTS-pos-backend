@@ -39,6 +39,12 @@ class ProductController extends Controller
 
     public function store(Request $request)
     {
+        // Auto-generate SKU if missing
+        if (empty($request->sku) && $request->name) {
+             $generatedSku = strtoupper(substr($request->name, 0, 3)) . '-' . date('Ymd') . '-' . rand(1000, 9999);
+             $request->merge(['sku' => $generatedSku]);
+        }
+
         $validated = $this->validatePayload($request);
         $product = Product::create($validated);
 
@@ -76,7 +82,7 @@ class ProductController extends Controller
         return $request->validate([
             'sku' => ['required', 'string', 'max:100', 'unique:products,sku,' . $productId],
             'barcode' => ['nullable', 'string', 'max:150', 'unique:products,barcode,' . $productId],
-            'name' => ['required', 'string'],
+            'name' => ['required', 'string', 'unique:products,name,' . $productId],
             'description' => ['nullable', 'string'],
             'category_id' => ['nullable', 'uuid', 'exists:categories,id'],
             'supplier_id' => ['nullable', 'uuid', 'exists:suppliers,id'],
