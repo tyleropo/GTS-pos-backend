@@ -50,6 +50,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/', [TransactionController::class, 'index']);
         Route::post('/', [TransactionController::class, 'store']);
         Route::get('/{transaction}', [TransactionController::class, 'show']);
+        Route::post('/{transaction}/refund', [TransactionController::class, 'refund']);
     });
 
     // Purchase Orders

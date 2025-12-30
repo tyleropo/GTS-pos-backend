@@ -22,18 +22,18 @@ class UserSeeder extends Seeder
         ]);
 
         User::factory()->create([
-            'first_name' => 'Ma. Cristina',
-            'last_name' => 'Pasague',
-            'email' => 'fake2@admin.com',
-            'password' => 'Annyeong1.',
+            'first_name' => 'GTS Marketing',
+            'last_name' => 'Admin',
+            'email' => 'admin@gtsmarketing.com',
+            'password' => 'GTSMarketing123.',
             'role' => 'manager',
         ]);
 
         User::factory()->create([
-            'first_name' => 'Jerico',
-            'last_name' => 'Paster',
-            'email' => 'fake3@admin.com',
-            'password' => 'JuswaTheGreat1.',
+            'first_name' => 'Jan',
+            'last_name' => 'Bingo',
+            'email' => 'janbingo@gtsmarketing.com',
+            'password' => 'JanBingo123.',
             'role' => 'cashier',
         ]);
     }

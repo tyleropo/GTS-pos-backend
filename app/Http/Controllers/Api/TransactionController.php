@@ -123,7 +123,93 @@ class TransactionController extends Controller
             return $transaction;
         });
 
-        return response()->json($transaction->load('customer', 'products'), 201);
+        return response()->json($transaction->load(['products', 'customer']));
+    }
+
+    public function refund(Request $request, string $id)
+    {
+        $request->validate([
+            'reason' => 'required|string|max:500',
+            'items' => 'nullable|array', // Optional: for partial refunds
+            'items.*' => 'uuid|exists:products,id',
+        ]);
+
+        $transaction = Transaction::with('products')->findOrFail($id);
+
+        // Check if already refunded
+        if ($transaction->status === 'refunded') {
+            return response()->json([
+                'message' => 'This transaction has already been fully refunded'
+            ], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            $refundAmount = 0;
+            $refundedItems = [];
+
+            // Determine what to refund
+            $itemsToRefund = $request->items 
+                ? $transaction->products->whereIn('id', $request->items)
+                : $transaction->products;
+
+            // Calculate refund amount and restore stock
+            foreach ($itemsToRefund as $product) {
+                $quantity = $product->pivot->quantity;
+                $lineTotal = $product->pivot->line_total;
+                
+                $refundAmount += $lineTotal;
+                $refundedItems[] = [
+                    'product_id' => $product->id,
+                    'product_name' => $product->name,
+                    'quantity' => $quantity,
+                    'amount' => $lineTotal,
+                ];
+
+                // Restore stock
+                $product->increment('stock_quantity', $quantity);
+
+                // Log stock movement
+                StockMovement::create([
+                    'product_id' => $product->id,
+                    'quantity' => $quantity,
+                    'type' => 'refund',
+                    'reference_type' => 'transaction',
+                    'reference_id' => $transaction->id,
+                    'notes' => 'Refund: ' . $request->reason,
+                ]);
+            }
+
+            // Create refund record
+            $refund = \App\Models\Refund::create([
+                'transaction_id' => $transaction->id,
+                'refund_amount' => $refundAmount,
+                'refund_reason' => $request->reason,
+                'refunded_items' => $refundedItems,
+                'refunded_by' => $request->user()->id ?? null,
+            ]);
+
+            // Update transaction status
+            $isPartialRefund = $request->items && count($request->items) < $transaction->products->count();
+            $transaction->update([
+                'status' => $isPartialRefund ? 'partially_refunded' : 'refunded'
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Transaction refunded successfully',
+                'refund' => $refund,
+                'transaction' => $transaction->fresh()->load(['products', 'customer']),
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Refund failed',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     public function show(Transaction $transaction)
