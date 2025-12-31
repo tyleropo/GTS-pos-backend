@@ -12,7 +12,9 @@ class Payment extends Model
     use HasFactory, HasUuids;
 
     protected $fillable = [
-        'purchase_order_id',
+        'payable_id',
+        'payable_type',
+        'type',
         'reference_number',
         'amount',
         'payment_method',
@@ -30,10 +32,26 @@ class Payment extends Model
     ];
 
     /**
-     * Get the purchase order that owns the payment.
+     * Get the owning payable model (PurchaseOrder or CustomerOrder).
      */
-    public function purchaseOrder(): BelongsTo
+    public function payable(): \Illuminate\Database\Eloquent\Relations\MorphTo
     {
-        return $this->belongsTo(PurchaseOrder::class);
+        return $this->morphTo();
+    }
+
+    /**
+     * Scope for inbound payments (from customers).
+     */
+    public function scopeInbound($query)
+    {
+        return $query->where('type', 'inbound');
+    }
+
+    /**
+     * Scope for outbound payments (to suppliers).
+     */
+    public function scopeOutbound($query)
+    {
+        return $query->where('type', 'outbound');
     }
 }
