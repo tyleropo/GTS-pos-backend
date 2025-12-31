@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\{
     DashboardController,
     LowStockController,
     BarcodeLookupController,
+    EmployeeController,
 };
 use Illuminate\Support\Facades\Route;
 
@@ -23,6 +24,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('top-selling', [DashboardController::class, 'topSelling']);
         Route::get('pending-repairs', [DashboardController::class, 'pendingRepairs']);
         Route::get('calendar-events', [DashboardController::class, 'calendarEvents']);
+        Route::get('daily-transactions', [DashboardController::class, 'dailyTransactions']);
     });
 
     // Products
@@ -59,4 +61,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Repairs
     Route::apiResource('repairs', RepairController::class);
+
+    // Employees
+    Route::apiResource('employees', EmployeeController::class);
+    Route::post('employees/from-user/{userId}', [EmployeeController::class, 'createFromUser']);
 });

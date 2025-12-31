@@ -9,13 +9,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class PurchaseOrder extends Model
+class CustomerOrder extends Model
 {
     use HasUuids, Auditable;
 
     protected $fillable = [
-        'po_number',
-        'supplier_id',
+        'co_number',
+        'customer_id',
         'status',
         'payment_status',
         'expected_at',
@@ -39,25 +39,25 @@ class PurchaseOrder extends Model
     ];
 
     /**
-     * Get the supplier for this purchase order
+     * Get the customer for this order
      */
-    public function supplier(): BelongsTo
+    public function customer(): BelongsTo
     {
-        return $this->belongsTo(Supplier::class, 'supplier_id');
+        return $this->belongsTo(Customer::class);
     }
 
     /**
-     * Get all products in this purchase order
+     * Get all products in this customer order
      */
     public function products(): BelongsToMany
     {
-        return $this->belongsToMany(Product::class, 'product_purchase_order')
-            ->withPivot('quantity_ordered', 'quantity_received', 'unit_cost', 'tax', 'line_total', 'description')
+        return $this->belongsToMany(Product::class, 'customer_order_product')
+            ->withPivot('quantity_ordered', 'quantity_fulfilled', 'unit_cost', 'tax', 'line_total', 'description')
             ->withTimestamps();
     }
 
     /**
-     * Get all payments for this purchase order
+     * Get all payments for this customer order
      */
     public function payments(): \Illuminate\Database\Eloquent\Relations\MorphMany
     {
@@ -65,7 +65,7 @@ class PurchaseOrder extends Model
     }
 
     /**
-     * Check if PO is in draft status
+     * Check if order is in draft status
      */
     public function isDraft(): bool
     {
@@ -73,7 +73,7 @@ class PurchaseOrder extends Model
     }
 
     /**
-     * Check if PO has been submitted
+     * Check if order has been submitted
      */
     public function isSubmitted(): bool
     {
@@ -81,15 +81,15 @@ class PurchaseOrder extends Model
     }
 
     /**
-     * Check if PO has been received
+     * Check if order has been fulfilled
      */
-    public function isReceived(): bool
+    public function isFulfilled(): bool
     {
-        return $this->status === 'received';
+        return $this->status === 'fulfilled';
     }
 
     /**
-     * Check if PO is cancelled
+     * Check if order is cancelled
      */
     public function isCancelled(): bool
     {
@@ -97,25 +97,25 @@ class PurchaseOrder extends Model
     }
 
     /**
-     * Check if PO is overdue (past expected date and not received/cancelled)
+     * Check if order is overdue (past expected date and not fulfilled/cancelled)
      */
     public function isOverdue(): bool
     {
         return $this->expected_at && 
                $this->expected_at->isPast() && 
-               !$this->isReceived() && 
+               !$this->isFulfilled() && 
                !$this->isCancelled();
     }
 
     /**
-     * Check if PO is partially received
+     * Check if order is partially fulfilled
      */
-    public function isPartiallyReceived(): bool
+    public function isPartiallyFulfilled(): bool
     {
-        $totalOrdered = $this->products()->sum('product_purchase_order.quantity_ordered');
-        $totalReceived = $this->products()->sum('product_purchase_order.quantity_received');
+        $totalOrdered = $this->products()->sum('customer_order_product.quantity_ordered');
+        $totalFulfilled = $this->products()->sum('customer_order_product.quantity_fulfilled');
         
-        return $totalReceived > 0 && $totalReceived < $totalOrdered;
+        return $totalFulfilled > 0 && $totalFulfilled < $totalOrdered;
     }
 
     /**
@@ -127,16 +127,16 @@ class PurchaseOrder extends Model
     }
 
     /**
-     * Scope to get overdue purchase orders
+     * Scope to get overdue customer orders
      */
     public function scopeOverdue($query)
     {
         return $query->where('expected_at', '<', now())
-            ->whereNotIn('status', ['received', 'cancelled']);
+            ->whereNotIn('status', ['fulfilled', 'cancelled']);
     }
 
     /**
-     * Scope to get pending purchase orders (submitted but not received)
+     * Scope to get pending customer orders (submitted but not fulfilled)
      */
     public function scopePending($query)
     {

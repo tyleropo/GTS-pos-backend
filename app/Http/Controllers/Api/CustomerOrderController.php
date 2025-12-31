@@ -3,33 +3,33 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\PurchaseOrder;
+use App\Models\CustomerOrder;
 use App\Models\Product;
 use App\Models\StockMovement;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-class PurchaseOrderController extends Controller
+class CustomerOrderController extends Controller
 {
     public function index(Request $request)
     {
-        $purchaseOrders = PurchaseOrder::with(['supplier', 'products', 'payments'])
+        $customerOrders = CustomerOrder::with(['customer', 'products', 'payments'])
             ->when($request->status, fn ($q, $status) => $q->status($status))
             ->orderByDesc('created_at')
             ->paginate($request->integer('per_page', 25));
 
-        // Transform each purchase order to include items from products relationship
-        $purchaseOrders->getCollection()->transform(function ($po) {
-            $poArray = $po->toArray();
+        // Transform each customer order to include items from products relationship
+        $customerOrders->getCollection()->transform(function ($co) {
+            $coArray = $co->toArray();
             
             // Replace items array with transformed products
-            $poArray['items'] = $po->products->map(function ($product) {
+            $coArray['items'] = $co->products->map(function ($product) {
                 return [
                     'product_id' => $product->id,
                     'product_name' => $product->name,
                     'quantity_ordered' => $product->pivot->quantity_ordered,
-                    'quantity_received' => $product->pivot->quantity_received,
+                    'quantity_fulfilled' => $product->pivot->quantity_fulfilled,
                     'unit_cost' => $product->pivot->unit_cost,
                     'tax' => $product->pivot->tax,
                     'line_total' => $product->pivot->line_total,
@@ -37,23 +37,40 @@ class PurchaseOrderController extends Controller
                 ];
             })->toArray();
             
-            // Ensure meta is an object, not null
-            if ($poArray['meta'] === null) {
-                $poArray['meta'] = new \stdClass();
+            // Calculate payment totals
+            $totalPaid = $co->payments->sum('amount');
+            $outstanding = max(0, $co->total - $totalPaid);
+            
+            // Determine payment status
+            if ($totalPaid == 0) {
+                $paymentStatus = 'pending';
+            } elseif ($totalPaid >= $co->total) {
+                $paymentStatus = 'paid';
+            } else {
+                $paymentStatus = 'partial';
             }
             
-            return $poArray;
+            $coArray['payment_status'] = $paymentStatus;
+            $coArray['total_paid'] = round($totalPaid, 2);
+            $coArray['outstanding_balance'] = round($outstanding, 2);
+            
+            // Ensure meta is an object, not null
+            if ($coArray['meta'] === null) {
+                $coArray['meta'] = new \stdClass();
+            }
+            
+            return $coArray;
         });
 
-        return response()->json($purchaseOrders);
+        return response()->json($customerOrders);
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'supplier_id' => ['required', 'uuid', 'exists:suppliers,id'],
+            'customer_id' => ['required', 'uuid', 'exists:customers,id'],
             'expected_at' => ['nullable', 'date'],
-            'status' => ['nullable', 'string', 'in:draft,submitted,received,cancelled'],
+            'status' => ['nullable', 'string', 'in:draft,submitted,fulfilled,cancelled'],
             'payment_status' => ['nullable', 'string', 'in:pending,paid'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'uuid', 'exists:products,id'],
@@ -69,12 +86,12 @@ class PurchaseOrderController extends Controller
             'meta' => ['nullable', 'array'],
         ]);
 
-        $po = DB::transaction(function () use ($validated) {
+        $co = DB::transaction(function () use ($validated) {
             $items = collect($validated['items']);
 
-            $po = PurchaseOrder::create([
-                'po_number' => 'PO-' . now()->format('Ymd') . '-' . strtoupper(Str::random(6)),
-                'supplier_id' => $validated['supplier_id'],
+            $co = CustomerOrder::create([
+                'co_number' => 'CO-' . now()->format('Ymd') . '-' . strtoupper(Str::random(6)),
+                'customer_id' => $validated['customer_id'],
                 'status' => $validated['status'] ?? 'draft',
                 'payment_status' => $validated['payment_status'] ?? 'pending',
                 'expected_at' => $validated['expected_at'] ?? null,
@@ -88,9 +105,9 @@ class PurchaseOrderController extends Controller
 
             // Attach products
             foreach ($items as $item) {
-                $po->products()->attach($item['product_id'], [
+                $co->products()->attach($item['product_id'], [
                     'quantity_ordered' => $item['quantity_ordered'],
-                    'quantity_received' => 0,
+                    'quantity_fulfilled' => 0,
                     'unit_cost' => $item['unit_cost'],
                     'tax' => $item['tax'] ?? 0,
                     'line_total' => $item['line_total'],
@@ -98,25 +115,25 @@ class PurchaseOrderController extends Controller
                 ]);
             }
 
-            return $po;
+            return $co;
         });
 
-        return response()->json($po->load('supplier', 'products'), 201);
+        return response()->json($co->load('customer', 'products'), 201);
     }
 
-    public function show(PurchaseOrder $purchaseOrder)
+    public function show(CustomerOrder $customerOrder)
     {
-        $purchaseOrder->load(['supplier', 'products', 'payments']);
+        $customerOrder->load(['customer', 'products', 'payments']);
         
-        $poArray = $purchaseOrder->toArray();
+        $coArray = $customerOrder->toArray();
         
         // Transform products into items array
-        $poArray['items'] = $purchaseOrder->products->map(function ($product) {
+        $coArray['items'] = $customerOrder->products->map(function ($product) {
             return [
                 'product_id' => $product->id,
                 'product_name' => $product->name,
                 'quantity_ordered' => $product->pivot->quantity_ordered,
-                'quantity_received' => $product->pivot->quantity_received,
+                'quantity_fulfilled' => $product->pivot->quantity_fulfilled,
                 'unit_cost' => $product->pivot->unit_cost,
                 'tax' => $product->pivot->tax,
                 'line_total' => $product->pivot->line_total,
@@ -124,19 +141,36 @@ class PurchaseOrderController extends Controller
             ];
         })->toArray();
         
-        // Ensure meta is an object, not null
-        if ($poArray['meta'] === null) {
-            $poArray['meta'] = new \stdClass();
+        // Calculate payment totals
+        $totalPaid = $customerOrder->payments->sum('amount');
+        $outstanding = max(0, $customerOrder->total - $totalPaid);
+        
+        // Determine payment status
+        if ($totalPaid == 0) {
+            $paymentStatus = 'pending';
+        } elseif ($totalPaid >= $customerOrder->total) {
+            $paymentStatus = 'paid';
+        } else {
+            $paymentStatus = 'partial';
         }
         
-        return response()->json($poArray);
+        $coArray['payment_status'] = $paymentStatus;
+        $coArray['total_paid'] = round($totalPaid, 2);
+        $coArray['outstanding_balance'] = round($outstanding, 2);
+        
+        // Ensure meta is an object, not null
+        if ($coArray['meta'] === null) {
+            $coArray['meta'] = new \stdClass();
+        }
+        
+        return response()->json($coArray);
     }
 
-    public function update(Request $request, PurchaseOrder $purchaseOrder)
+    public function update(Request $request, CustomerOrder $customerOrder)
     {
         $validated = $request->validate([
-            'supplier_id' => 'required|exists:suppliers,id',
-            'status' => 'required|string|in:draft,submitted,received,cancelled',
+            'customer_id' => 'required|exists:customers,id',
+            'status' => 'required|string|in:draft,submitted,fulfilled,cancelled',
             'payment_status' => 'nullable|string|in:pending,paid',
             'expected_at' => 'nullable|date',
             'subtotal' => 'required|numeric',
@@ -151,9 +185,9 @@ class PurchaseOrderController extends Controller
             'meta' => 'nullable|array',
         ]);
 
-        $updatedPurchaseOrder = DB::transaction(function () use ($validated, $purchaseOrder) {
-            $purchaseOrder->update([
-                'supplier_id' => $validated['supplier_id'],
+        $updatedCustomerOrder = DB::transaction(function () use ($validated, $customerOrder) {
+            $customerOrder->update([
+                'customer_id' => $validated['customer_id'],
                 'status' => $validated['status'],
                 'payment_status' => $validated['payment_status'] ?? 'pending',
                 'expected_at' => $validated['expected_at'] ?? null,
@@ -164,84 +198,84 @@ class PurchaseOrderController extends Controller
                 'meta' => $validated['meta'] ?? [],
             ]);
 
-            $existingProducts = $purchaseOrder->products->keyBy('id');
+            $existingProducts = $customerOrder->products->keyBy('id');
             $syncData = [];
             foreach ($validated['items'] as $item) {
                 $existingPivot = $existingProducts->get($item['product_id'])?->pivot;
                 $syncData[$item['product_id']] = [
                     'quantity_ordered' => $item['quantity_ordered'],
                     'unit_cost' => $item['unit_cost'],
-                    'line_total' => $item['quantity_ordered'] * $item['unit_cost'], // Recalculate or trust frontend? Trust frontend for now but ideally re-calc
+                    'line_total' => $item['quantity_ordered'] * $item['unit_cost'],
                     'description' => $item['description'] ?? null,
-                    'quantity_received' => $existingPivot ? $existingPivot->quantity_received : 0,
+                    'quantity_fulfilled' => $existingPivot ? $existingPivot->quantity_fulfilled : 0,
                 ];
             }
             
-            $purchaseOrder->products()->sync($syncData);
+            $customerOrder->products()->sync($syncData);
 
-            return $purchaseOrder->fresh(['products', 'supplier']); // Return fresh supplier data
+            return $customerOrder->fresh(['products', 'customer']);
         });
 
-        return response()->json($updatedPurchaseOrder);
+        return response()->json($updatedCustomerOrder);
     }
 
-    public function receive(Request $request, PurchaseOrder $purchaseOrder)
+    public function fulfill(Request $request, CustomerOrder $customerOrder)
     {
         $validated = $request->validate([
             'items' => ['required', 'array'],
             'items.*.product_id' => ['required', 'uuid', 'exists:products,id'],
-            'items.*.quantity_received' => ['required', 'integer', 'min:0'],
+            'items.*.quantity_fulfilled' => ['required', 'integer', 'min:0'],
         ]);
 
-        DB::transaction(function () use ($purchaseOrder, $validated, $request) {
+        DB::transaction(function () use ($customerOrder, $validated, $request) {
             foreach ($validated['items'] as $item) {
                 $product = Product::findOrFail($item['product_id']);
-                $quantityReceived = $item['quantity_received'];
+                $quantityFulfilled = $item['quantity_fulfilled'];
 
                 // Update pivot table
-                $purchaseOrder->products()->updateExistingPivot($item['product_id'], [
-                    'quantity_received' => DB::raw("quantity_received + {$quantityReceived}"),
+                $customerOrder->products()->updateExistingPivot($item['product_id'], [
+                    'quantity_fulfilled' => DB::raw("quantity_fulfilled + {$quantityFulfilled}"),
                 ]);
 
-                // Update product stock
+                // DEDUCT product stock (this is the key difference from purchase orders)
                 $oldStock = $product->stock_quantity;
-                $product->increment('stock_quantity', $quantityReceived);
+                $product->decrement('stock_quantity', $quantityFulfilled);
                 $newStock = $product->fresh()->stock_quantity;
 
-                // Log stock movement
+                // Log stock movement as 'out'
                 StockMovement::create([
                     'product_id' => $product->id,
-                    'type' => 'in',
-                    'quantity' => $quantityReceived,
+                    'type' => 'out',
+                    'quantity' => $quantityFulfilled,
                     'previous_stock' => $oldStock,
                     'new_stock' => $newStock,
-                    'reference_type' => PurchaseOrder::class,
-                    'reference_id' => $purchaseOrder->id,
-                    'notes' => 'PO receipt: ' . $purchaseOrder->po_number,
+                    'reference_type' => CustomerOrder::class,
+                    'reference_id' => $customerOrder->id,
+                    'notes' => 'Customer order fulfillment: ' . $customerOrder->co_number,
                     'user_id' => $request->user()?->id,
                 ]);
             }
 
-            // Check if fully received
-            $fullyReceived = $purchaseOrder->products()
+            // Check if fully fulfilled
+            $fullyFulfilled = $customerOrder->products()
                 ->get()
-                ->every(fn ($p) => $p->pivot->quantity_received >= $p->pivot->quantity_ordered);
+                ->every(fn ($p) => $p->pivot->quantity_fulfilled >= $p->pivot->quantity_ordered);
 
-            if ($fullyReceived) {
-                $purchaseOrder->update(['status' => 'received']);
+            if ($fullyFulfilled) {
+                $customerOrder->update(['status' => 'fulfilled']);
             }
         });
 
-        return response()->json($purchaseOrder->fresh()->load('supplier', 'products'));
+        return response()->json($customerOrder->fresh()->load('customer', 'products'));
     }
 
-    public function destroy(PurchaseOrder $purchaseOrder)
+    public function destroy(CustomerOrder $customerOrder)
     {
-        if ($purchaseOrder->status !== 'draft') {
-            return response()->json(['message' => 'Only draft POs can be deleted'], 422);
+        if ($customerOrder->status !== 'draft') {
+            return response()->json(['message' => 'Only draft customer orders can be deleted'], 422);
         }
 
-        $purchaseOrder->delete();
+        $customerOrder->delete();
         return response()->noContent();
     }
 }

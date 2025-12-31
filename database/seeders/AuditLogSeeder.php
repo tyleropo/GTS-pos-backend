@@ -27,7 +27,7 @@ class AuditLogSeeder extends Seeder
                 'model_type' => 'App\\Models\\User',
                 'model_id' => $users->first()->id,
                 'ip_address' => '127.0.0.1',
-                'changes' => json_encode([
+                'new_values' => json_encode([
                     'name' => 'John Doe',
                     'email' => 'john@example.com',
                 ]),
@@ -38,7 +38,7 @@ class AuditLogSeeder extends Seeder
                 'model_type' => 'App\\Models\\Product',
                 'model_id' => 1,
                 'ip_address' => '127.0.0.1',
-                'changes' => json_encode([
+                'new_values' => json_encode([
                     'price' => ['old' => 100, 'new' => 120],
                 ]),
             ],
@@ -48,7 +48,7 @@ class AuditLogSeeder extends Seeder
                 'model_type' => 'App\\Models\\Transaction',
                 'model_id' => 1,
                 'ip_address' => '192.168.1.1',
-                'changes' => json_encode([
+                'new_values' => json_encode([
                     'total' => 250.00,
                     'customer_id' => 1,
                 ]),
@@ -59,7 +59,7 @@ class AuditLogSeeder extends Seeder
                 'model_type' => 'App\\Models\\Product',
                 'model_id' => 5,
                 'ip_address' => '192.168.1.5',
-                'changes' => json_encode([
+                'new_values' => json_encode([
                     'name' => 'Deleted Product',
                 ]),
             ],
@@ -69,7 +69,7 @@ class AuditLogSeeder extends Seeder
                 'model_type' => 'App\\Models\\Customer',
                 'model_id' => 2,
                 'ip_address' => '127.0.0.1',
-                'changes' => json_encode([
+                'new_values' => json_encode([
                     'phone' => ['old' => '1234567890', 'new' => '0987654321'],
                 ]),
             ],

@@ -41,6 +41,11 @@ class PayrollRecord extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function employee(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class);
+    }
+
     /**
      * Get the payroll period
      */

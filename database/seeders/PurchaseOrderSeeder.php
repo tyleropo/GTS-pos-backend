@@ -4,7 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\PurchaseOrder;
 use App\Models\Product;
-use App\Models\Customer;
+use App\Models\Supplier;
 use App\Models\StockMovement;
 use Illuminate\Database\Seeder;
 
@@ -12,17 +12,17 @@ class PurchaseOrderSeeder extends Seeder
 {
     public function run(): void
     {
-        $customers = Customer::limit(3)->get();
+        $suppliers = Supplier::limit(3)->get();
         $products = Product::limit(5)->get();
 
-        if ($customers->isEmpty() || $products->isEmpty()) {
+        if ($suppliers->isEmpty() || $products->isEmpty()) {
             return;
         }
 
         // PO 1: Submitted, pending delivery
         $po1 = PurchaseOrder::create([
             'po_number' => 'PO-20241205-XYZ123',
-            'supplier_id' => $customers[0]->id,
+            'supplier_id' => $suppliers[0]->id,
             'status' => 'submitted',
             'payment_status' => 'pending',
             'expected_at' => now()->addDays(7),
@@ -49,7 +49,7 @@ class PurchaseOrderSeeder extends Seeder
         // PO 2: Partially received
         $po2 = PurchaseOrder::create([
             'po_number' => 'PO-20241203-ABC456',
-            'supplier_id' => $customers[1]->id,
+            'supplier_id' => $suppliers[1]->id,
             'status' => 'submitted',
             'payment_status' => 'pending',
             'expected_at' => now()->addDays(3),
@@ -92,7 +92,7 @@ class PurchaseOrderSeeder extends Seeder
         // PO 3: Fully received (completed)
         $po3 = PurchaseOrder::create([
             'po_number' => 'PO-20241130-DEF789',
-            'supplier_id' => $customers[2]->id,
+            'supplier_id' => $suppliers[2]->id,
             'status' => 'received',
             'payment_status' => 'paid',
             'expected_at' => now()->subDays(2),

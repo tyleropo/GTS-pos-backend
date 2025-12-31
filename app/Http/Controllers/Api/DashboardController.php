@@ -19,7 +19,10 @@ class DashboardController extends Controller
             : 0;
 
         $todayTransactions = Transaction::whereDate('created_at', today())->count();
-        $totalProducts = Product::active()->count();
+        $pendingOrders = \App\Models\CustomerOrder::where('status', 'submitted')->count(); // Pending/Submitted orders
+        $inProgressOrders = \App\Models\CustomerOrder::where('status', 'fulfilled')->count(); // Just for hint? Or maybe partial?
+        // Actually, let's just show Pending Orders
+        
         $lowStockCount = Product::lowStock()->count();
         $outOfStockCount = Product::outOfStock()->count();
         $pendingRepairs = Repair::pending()->count();
@@ -36,12 +39,12 @@ class DashboardController extends Controller
                 'href' => '/transactions',
             ],
             [
-                'title' => 'Total Products',
-                'value' => $totalProducts,
+                'title' => 'Pending Orders',
+                'value' => $pendingOrders,
                 'trend' => 'neutral',
-                'hint' => $outOfStockCount > 0 ? $outOfStockCount . ' out of stock' : 'All products in stock',
-                'icon' => 'products',
-                'href' => '/inventory',
+                'hint' => 'Customer orders to fulfill',
+                'icon' => 'orders',
+                'href' => '/customer-orders',
             ],
             [
                 'title' => 'Low Stock Items',
@@ -135,19 +138,36 @@ class DashboardController extends Controller
     public function calendarEvents()
     {
         // Get PO delivery dates (non-cancelled, with expected_at)
-        $poEvents = \App\Models\PurchaseOrder::with('customer')
+        $poEvents = \App\Models\PurchaseOrder::with('supplier')
             ->whereNotNull('expected_at')
             ->whereNotIn('status', ['cancelled'])
             ->get()
             ->map(fn ($po) => [
                 'id' => 'po-' . $po->id,
-                'title' => $po->po_number . ' - ' . ($po->customer?->company ?? $po->customer?->name ?? 'Unknown'),
+                'title' => $po->po_number . ' - ' . ($po->supplier?->company_name ?? 'Unknown'),
                 'start' => $po->expected_at->format('Y-m-d'),
                 'color' => $po->status === 'received' ? '#22c55e' : '#3b82f6', // green if received, blue otherwise
                 'extendedProps' => [
                     'type' => 'po',
                     'id' => $po->id,
                     'status' => $po->status,
+                ],
+            ]);
+
+        // Get Customer Order dates (non-cancelled, with expected_at)
+        $coEvents = \App\Models\CustomerOrder::with('customer')
+            ->whereNotNull('expected_at')
+            ->whereNotIn('status', ['cancelled'])
+            ->get()
+            ->map(fn ($co) => [
+                'id' => 'co-' . $co->id,
+                'title' => $co->co_number . ' - ' . ($co->customer?->name ?? 'Unknown'),
+                'start' => $co->expected_at->format('Y-m-d'),
+                'color' => $co->status === 'fulfilled' ? '#22c55e' : '#8b5cf6', // green if fulfilled, purple otherwise
+                'extendedProps' => [
+                    'type' => 'co',
+                    'id' => $co->id,
+                    'status' => $co->status,
                 ],
             ]);
 
@@ -167,6 +187,24 @@ class DashboardController extends Controller
                 ],
             ]);
 
-        return response()->json($poEvents->merge($repairEvents)->values());
+        return response()->json($poEvents->merge($coEvents)->merge($repairEvents)->values());
+    }
+    public function dailyTransactions()
+    {
+        $transactions = Transaction::with('customer')
+            ->whereDate('created_at', today())
+            ->latest()
+            ->limit(10)
+            ->get()
+            ->map(fn ($t) => [
+                'id' => $t->id,
+                'invoice_number' => $t->invoice_number,
+                'customer' => $t->customer ? $t->customer->name : 'Walk-in',
+                'total' => $t->total,
+                'status' => $t->payment_status ?? 'paid', // Assuming payment_status or fallback
+                'time' => $t->created_at->format('h:i A'),
+            ]);
+
+        return response()->json($transactions);
     }
 }
