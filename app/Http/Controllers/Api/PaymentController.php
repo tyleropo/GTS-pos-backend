@@ -13,7 +13,12 @@ class PaymentController extends Controller
      */
     public function index(Request $request)
     {
-        $payments = Payment::with('payable')
+        $payments = Payment::with(['payable' => function ($morphTo) {
+            $morphTo->morphWith([
+                \App\Models\PurchaseOrder::class => ['supplier'],
+                \App\Models\CustomerOrder::class => ['customer'],
+            ]);
+        }])
             ->when($request->payable_id, fn ($q, $id) => $q->where('payable_id', $id))
             ->when($request->payable_type, fn ($q, $type) => $q->where('payable_type', $type))
             ->when($request->type, fn ($q, $type) => $q->where('type', $type))
@@ -37,6 +42,8 @@ class PaymentController extends Controller
             'reference_number' => ['nullable', 'string', 'max:255'],
             'amount' => ['required', 'numeric', 'min:0'],
             'payment_method' => ['required', 'in:cash,cheque,bank_transfer,credit_card'],
+            'bank_name' => ['nullable', 'string', 'max:255', 'required_if:payment_method,cheque,bank_transfer,credit_card'],
+            'account_number' => ['nullable', 'string', 'max:255', 'required_if:payment_method,cheque,bank_transfer,credit_card'],
             'date_received' => ['required', 'date'],
             'is_deposited' => ['boolean'],
             'date_deposited' => ['nullable', 'date', 'required_if:is_deposited,true'],
@@ -90,6 +97,8 @@ class PaymentController extends Controller
             'reference_number' => ['sometimes', 'nullable', 'string', 'max:255'],
             'amount' => ['sometimes', 'numeric', 'min:0'],
             'payment_method' => ['sometimes', 'in:cash,cheque,bank_transfer,credit_card'],
+            'bank_name' => ['sometimes', 'nullable', 'string', 'max:255'], // Not strictly required on update unless payment method changes, keeping loose
+            'account_number' => ['sometimes', 'nullable', 'string', 'max:255'],
             'date_received' => ['sometimes', 'date'],
             'is_deposited' => ['sometimes', 'boolean'],
             'date_deposited' => ['nullable', 'date', 'required_if:is_deposited,true'],

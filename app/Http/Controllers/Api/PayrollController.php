@@ -15,7 +15,7 @@ class PayrollController extends Controller
      */
     public function index(Request $request)
     {
-        $query = PayrollPeriod::with('payrollRecords')->orderBy('start_date', 'desc');
+        $query = PayrollPeriod::with(['payrollRecords.employee', 'payrollRecords.user'])->orderBy('start_date', 'desc');
 
         if ($request->has('status')) {
             $query->where('status', $request->status);
@@ -42,43 +42,38 @@ class PayrollController extends Controller
             'period_type' => ['required', 'in:weekly,bi-weekly,monthly,custom'],
             'employee_selection' => ['required', 'in:all,custom'],
             'selected_user_ids' => ['nullable', 'array'],
-            'selected_user_ids.*' => ['integer', 'exists:users,id'],
+            'selected_user_ids.*' => ['integer', 'exists:employees,id'], // Changed from users to employees
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after:start_date'],
         ]);
 
         $period = PayrollPeriod::create($validated);
 
-        // Get users to include in payroll
-        // Only include users with manager, cashier, or technician roles
-        $query = User::where('is_active', true)
-            ->where(function ($q) {
-                $q->whereJsonContains('roles', 'manager')
-                  ->orWhereJsonContains('roles', 'cashier')
-                  ->orWhereJsonContains('roles', 'technician');
-            });
+        // Get employees to include in payroll
+        $query = \App\Models\Employee::where('status', 'active');
 
-        // If custom selection, filter by selected user IDs
+        // If custom selection, filter by selected employee IDs
         if ($validated['employee_selection'] === 'custom' && !empty($validated['selected_user_ids'])) {
             $query->whereIn('id', $validated['selected_user_ids']);
         }
 
-        $users = $query->get();
+        $employees = $query->get();
         
-        // Create empty payroll records for selected users
-        foreach ($users as $user) {
+        // Create empty payroll records for selected employees
+        foreach ($employees as $employee) {
             PayrollRecord::create([
-                'user_id' => $user->id,
+                'employee_id' => $employee->id,
+                'user_id' => $employee->user_id, // Keep user_id populated if available for backward compat
                 'payroll_period_id' => $period->id,
-                'base_salary' => 0,
+                'base_salary' => $employee->salary, // Use employee's base salary
                 'commission' => 0,
-                'gross_pay' => 0,
+                'gross_pay' => $employee->salary, // Initial gross is base
                 'total_deductions' => 0,
-                'net_pay' => 0,
+                'net_pay' => $employee->salary, // Initial net is base
             ]);
         }
 
-        return response()->json($period->load('payrollRecords.user'), 201);
+        return response()->json($period->load('payrollRecords.employee'), 201);
     }
 
     /**
@@ -86,7 +81,7 @@ class PayrollController extends Controller
      */
     public function show($id)
     {
-        $period = PayrollPeriod::with(['payrollRecords.user'])->findOrFail($id);
+        $period = PayrollPeriod::with(['payrollRecords.employee', 'payrollRecords.user'])->findOrFail($id);
         
         $period->total_payroll = $period->payrollRecords->sum('net_pay');
         $period->employee_count = $period->payrollRecords->count();

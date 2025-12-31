@@ -28,6 +28,7 @@ class DatabaseSeeder extends Seeder
             TransactionSeeder::class,
             PurchaseOrderSeeder::class,
             UserSeeder::class,
+            EmployeeSeeder::class, // Must run after UserSeeder
             AuditLogSeeder::class,
         ]);
     }
