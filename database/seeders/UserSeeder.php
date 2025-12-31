@@ -26,7 +26,7 @@ class UserSeeder extends Seeder
             'last_name' => 'Admin',
             'email' => 'admin@gtsmarketing.com',
             'password' => 'GTSMarketing123.',
-            'roles' => ['manager'],
+            'roles' => ['admin'],
         ]);
         
         User::factory()->create([
