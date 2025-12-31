@@ -18,7 +18,7 @@ class UserSeeder extends Seeder
             'last_name' => 'Opo',
             'email' => 'fake1@admin.com',
             'password' => 'Hatdog123.',
-            'role' => 'admin',
+            'roles' => ['admin'],
         ]);
 
         User::factory()->create([
@@ -26,7 +26,23 @@ class UserSeeder extends Seeder
             'last_name' => 'Admin',
             'email' => 'admin@gtsmarketing.com',
             'password' => 'GTSMarketing123.',
-            'role' => 'manager',
+            'roles' => ['manager'],
+        ]);
+        
+        User::factory()->create([
+            'first_name' => 'Neil',
+            'last_name' => 'Opo',
+            'email' => 'neil@gtsmarketing.com',
+            'password' => 'NeilOpo123.',
+            'roles' => ['manager', 'cashier', 'technician'],
+        ]);
+
+        User::factory()->create([
+            'first_name' => 'Liezl',
+            'last_name' => 'Opo',
+            'email' => 'liezl@gtsmarketing.com',
+            'password' => 'LiezlOpo123.',
+            'roles' => ['manager', 'cashier'],
         ]);
 
         User::factory()->create([
@@ -34,7 +50,7 @@ class UserSeeder extends Seeder
             'last_name' => 'Bingo',
             'email' => 'janbingo@gtsmarketing.com',
             'password' => 'JanBingo123.',
-            'role' => 'cashier',
+            'roles' => ['cashier', 'technician'],
         ]);
     }
 }

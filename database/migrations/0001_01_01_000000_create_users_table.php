@@ -18,7 +18,7 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
-            $table->enum('role', ['admin', 'manager', 'cashier', 'technician'])->default('cashier');
+            $table->json('roles'); // Changed from enum to JSON for multi-role support
             $table->boolean('is_active')->default(true);
             $table->timestamp('last_login_at')->nullable();
             $table->string('avatar_url')->nullable();

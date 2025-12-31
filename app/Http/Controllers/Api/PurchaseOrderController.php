@@ -148,6 +148,7 @@ class PurchaseOrderController extends Controller
             'items.*.quantity_ordered' => 'required|integer|min:1',
             'items.*.unit_cost' => 'required|numeric|min:0',
             'items.*.description' => 'nullable|string',
+            'meta' => 'nullable|array',
         ]);
 
         $updatedPurchaseOrder = DB::transaction(function () use ($validated, $purchaseOrder) {
@@ -160,6 +161,7 @@ class PurchaseOrderController extends Controller
                 'tax' => $validated['tax'],
                 'total' => $validated['total'],
                 'notes' => $validated['notes'] ?? null,
+                'meta' => $validated['meta'] ?? [],
             ]);
 
             $existingProducts = $purchaseOrder->products->keyBy('id');
