@@ -28,7 +28,7 @@ class PurchaseOrder extends Model
     ];
 
     protected $casts = [
-        'expected_at' => 'date',
+        'expected_at' => 'datetime',
         'subtotal' => 'decimal:2',
         'tax' => 'decimal:2',
         'total' => 'decimal:2',
@@ -39,20 +39,11 @@ class PurchaseOrder extends Model
     ];
 
     /**
-     * Get the customer for this purchase order
-     * (Stored in supplier_id column)
-     */
-    public function customer(): BelongsTo
-    {
-        return $this->belongsTo(Customer::class, 'supplier_id');
-    }
-
-    /**
-     * Get the supplier (Legacy alias for customer)
+     * Get the supplier for this purchase order
      */
     public function supplier(): BelongsTo
     {
-        return $this->belongsTo(Customer::class, 'supplier_id');
+        return $this->belongsTo(Supplier::class, 'supplier_id');
     }
 
     /**
@@ -68,9 +59,9 @@ class PurchaseOrder extends Model
     /**
      * Get all payments for this purchase order
      */
-    public function payments(): HasMany
+    public function payments(): \Illuminate\Database\Eloquent\Relations\MorphMany
     {
-        return $this->hasMany(Payment::class);
+        return $this->morphMany(Payment::class, 'payable');
     }
 
     /**

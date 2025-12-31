@@ -14,7 +14,7 @@ class PurchaseOrderController extends Controller
 {
     public function index(Request $request)
     {
-        $purchaseOrders = PurchaseOrder::with(['customer', 'products', 'payments'])
+        $purchaseOrders = PurchaseOrder::with(['supplier', 'products', 'payments'])
             ->when($request->status, fn ($q, $status) => $q->status($status))
             ->orderByDesc('created_at')
             ->paginate($request->integer('per_page', 25));
@@ -51,7 +51,7 @@ class PurchaseOrderController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'supplier_id' => ['required', 'uuid', 'exists:customers,id'],
+            'supplier_id' => ['required', 'uuid', 'exists:suppliers,id'],
             'expected_at' => ['nullable', 'date'],
             'status' => ['nullable', 'string', 'in:draft,submitted,received,cancelled'],
             'payment_status' => ['nullable', 'string', 'in:pending,paid'],
@@ -101,12 +101,12 @@ class PurchaseOrderController extends Controller
             return $po;
         });
 
-        return response()->json($po->load('customer', 'products'), 201);
+        return response()->json($po->load('supplier', 'products'), 201);
     }
 
     public function show(PurchaseOrder $purchaseOrder)
     {
-        $purchaseOrder->load(['customer', 'products', 'payments']);
+        $purchaseOrder->load(['supplier', 'products', 'payments']);
         
         $poArray = $purchaseOrder->toArray();
         
@@ -135,7 +135,7 @@ class PurchaseOrderController extends Controller
     public function update(Request $request, PurchaseOrder $purchaseOrder)
     {
         $validated = $request->validate([
-            'supplier_id' => 'required|exists:customers,id',
+            'supplier_id' => 'required|exists:suppliers,id',
             'status' => 'required|string|in:draft,submitted,received,cancelled',
             'payment_status' => 'nullable|string|in:pending,paid',
             'expected_at' => 'nullable|date',
@@ -179,7 +179,7 @@ class PurchaseOrderController extends Controller
             
             $purchaseOrder->products()->sync($syncData);
 
-            return $purchaseOrder->fresh(['products', 'customer']); // Return fresh customer data too
+            return $purchaseOrder->fresh(['products', 'supplier']); // Return fresh supplier data
         });
 
         return response()->json($updatedPurchaseOrder);
@@ -193,7 +193,7 @@ class PurchaseOrderController extends Controller
             'items.*.quantity_received' => ['required', 'integer', 'min:0'],
         ]);
 
-        DB::transaction(function () use ($purchaseOrder, $validated) {
+        DB::transaction(function () use ($purchaseOrder, $validated, $request) {
             foreach ($validated['items'] as $item) {
                 $product = Product::findOrFail($item['product_id']);
                 $quantityReceived = $item['quantity_received'];
@@ -218,7 +218,7 @@ class PurchaseOrderController extends Controller
                     'reference_type' => PurchaseOrder::class,
                     'reference_id' => $purchaseOrder->id,
                     'notes' => 'PO receipt: ' . $purchaseOrder->po_number,
-                    'user_id' => auth()->id(),
+                    'user_id' => $request->user()?->id,
                 ]);
             }
 
@@ -232,7 +232,7 @@ class PurchaseOrderController extends Controller
             }
         });
 
-        return response()->json($purchaseOrder->fresh()->load('customer', 'products'));
+        return response()->json($purchaseOrder->fresh()->load('supplier', 'products'));
     }
 
     public function destroy(PurchaseOrder $purchaseOrder)
