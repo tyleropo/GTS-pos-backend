@@ -1,0 +1,14 @@
+<?php
+
+use App\Http\Controllers\Api\UserController;
+use Illuminate\Support\Facades\Route;
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/users', [UserController::class, 'index']);
+    Route::post('/users', [UserController::class, 'store']);
+    Route::get('/users/{user}', [UserController::class, 'show']);
+    Route::put('/users/{user}', [UserController::class, 'update']);
+    Route::delete('/users/{user}', [UserController::class, 'destroy']);
+    Route::patch('/users/{user}/toggle-status', [UserController::class, 'toggleStatus']);
+    Route::patch('/users/{user}/last-login', [UserController::class, 'updateLastLogin']);
+});

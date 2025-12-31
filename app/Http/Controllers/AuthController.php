@@ -15,7 +15,8 @@ class AuthController
             'last_name' => 'required|string|max:255',
             'email' => 'required|email|unique:users',
             'password' => ['required', 'string', 'min:8', 'regex:/[A-Z]/', 'confirmed'],
-            'role' => 'sometimes|in:admin,manager,cashier,technician',
+            'roles' => 'sometimes|array',
+            'roles.*' => 'in:admin,manager,cashier,technician',
             'remember' => 'boolean',
         ]);
 
@@ -25,7 +26,7 @@ class AuthController
             $user->last_name = $validated['last_name'];
             $user->email = $validated['email'];
             $user->password = $validated['password'];
-            $user->role = $validated['role'] ?? 'cashier';
+            $user->roles = $validated['roles'] ?? ['cashier'];
             $user->save();
         } catch (\Throwable $error) {
             return response(['error' => 'Failed to register user', $error], 500);

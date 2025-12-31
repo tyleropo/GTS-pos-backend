@@ -15,7 +15,7 @@ class DatabaseSeeder extends Seeder
             'first_name' => 'Test',
             'last_name' => 'User',
             'email' => 'test@example.com',
-            'role' => 'admin',
+            'roles' => ['admin'],
         ]);
 
         // Seed POS data in correct order (respecting foreign key dependencies)
@@ -28,6 +28,7 @@ class DatabaseSeeder extends Seeder
             TransactionSeeder::class,
             PurchaseOrderSeeder::class,
             UserSeeder::class,
+            AuditLogSeeder::class,
         ]);
     }
 }
