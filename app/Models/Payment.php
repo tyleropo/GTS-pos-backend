@@ -79,7 +79,7 @@ class Payment extends Model
     }
 
     /**
-     * Scope for inbound payments (from customers).
+     * Scope for inbound payments (receivables from customers).
      */
     public function scopeInbound($query)
     {
@@ -87,7 +87,7 @@ class Payment extends Model
     }
 
     /**
-     * Scope for outbound payments (to suppliers).
+     * Scope for outbound payments (payables to suppliers).
      */
     public function scopeOutbound($query)
     {
