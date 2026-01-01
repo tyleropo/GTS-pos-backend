@@ -16,6 +16,13 @@ class CustomerOrderController extends Controller
     {
         $customerOrders = CustomerOrder::with(['customer', 'products', 'payments'])
             ->when($request->status, fn ($q, $status) => $q->status($status))
+            ->when($request->customer_id, fn ($q, $id) => $q->where('customer_id', $id))
+            ->when($request->customer_ids, function ($q, $ids) {
+                $idList = is_array($ids) ? $ids : explode(',', $ids);
+                $q->whereIn('customer_id', $idList);
+            })
+            ->when($request->date_from, fn ($q, $date) => $q->whereDate('created_at', '>=', $date))
+            ->when($request->date_to, fn ($q, $date) => $q->whereDate('created_at', '<=', $date))
             ->orderByDesc('created_at')
             ->paginate($request->integer('per_page', 25));
 
@@ -266,6 +273,12 @@ class CustomerOrderController extends Controller
             }
         });
 
+        return response()->json($customerOrder->fresh()->load('customer', 'products'));
+    }
+
+    public function cancel(CustomerOrder $customerOrder)
+    {
+        $customerOrder->update(['status' => 'cancelled']);
         return response()->json($customerOrder->fresh()->load('customer', 'products'));
     }
 
