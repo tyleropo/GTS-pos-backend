@@ -49,11 +49,22 @@ class CustomerOrder extends Model
     /**
      * Get all products in this customer order
      */
+    /**
+     * Get all products in this customer order
+     */
     public function products(): BelongsToMany
     {
         return $this->belongsToMany(Product::class, 'customer_order_product')
-            ->withPivot('quantity_ordered', 'quantity_fulfilled', 'unit_cost', 'tax', 'line_total', 'description')
+            ->withPivot('quantity_ordered', 'quantity_fulfilled', 'unit_cost', 'tax', 'line_total', 'description', 'is_voided', 'void_reason')
             ->withTimestamps();
+    }
+
+    /**
+     * Get separate adjustments for this order (e.g. cash substitution)
+     */
+    public function adjustments(): HasMany
+    {
+        return $this->hasMany(CustomerOrderAdjustment::class);
     }
 
     /**
