@@ -59,7 +59,7 @@ class TransactionController extends Controller
     {
         $validated = $request->validate([
             'customer_id' => ['nullable', 'uuid', 'exists:customers,id'],
-            'payment_method' => ['required', 'in:cash,card,gcash'],
+            'payment_method' => ['required', 'string'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'uuid', 'exists:products,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],

@@ -48,6 +48,11 @@ class ReportController extends Controller
             ->orderBy('date')
             ->get();
 
+        $transactionsByStatus = (clone $query)
+            ->select('status', DB::raw('count(*) as count'), DB::raw('sum(total) as total'))
+            ->groupBy('status')
+            ->get();
+
         $stats = [
             'total_revenue' => $totalRevenue ?? 0,
             'total_transactions' => $totalTransactions,
@@ -55,6 +60,7 @@ class ReportController extends Controller
             'total_discount' => $totalDiscount ?? 0,
             'average_transaction' => $averageTransaction ?? 0,
             'daily_sales' => $dailySales,
+            'transactions_by_status' => $transactionsByStatus,
         ];
 
         return response()->json($stats);
@@ -69,17 +75,16 @@ class ReportController extends Controller
 
         $stats = [
             'total_products' => Product::count(),
-            'total_stock_value' => Product::sum(DB::raw('quantity * price')) ?? 0,
-            'low_stock_products' => Product::where('quantity', '<=', $lowStockThreshold)
-                ->orderBy('quantity')
+            'total_stock_value' => Product::sum(DB::raw('stock_quantity * cost_price')) ?? 0,
+            'low_stock_products' => Product::where('stock_quantity', '<=', $lowStockThreshold)
+                ->orderBy('stock_quantity')
                 ->get(),
-            'out_of_stock_products' => Product::where('quantity', 0)->count(),
+            'out_of_stock_products' => Product::where('stock_quantity', 0)->count(),
             'products_by_category' => DB::table('products')
-                ->leftJoin('category_product', 'products.id', '=', 'category_product.product_id')
-                ->leftJoin('categories', 'category_product.category_id', '=', 'categories.id')
+                ->leftJoin('categories', 'products.category_id', '=', 'categories.id')
                 ->select(
                     DB::raw('COALESCE(categories.name, "Uncategorized") as category'),
-                    DB::raw('count(DISTINCT products.id) as count')
+                    DB::raw('count(products.id) as count')
                 )
                 ->groupBy('categories.name')
                 ->get(),
