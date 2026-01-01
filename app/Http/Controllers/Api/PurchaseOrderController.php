@@ -56,7 +56,7 @@ class PurchaseOrderController extends Controller
             'status' => ['nullable', 'string', 'in:draft,submitted,received,cancelled'],
             'payment_status' => ['nullable', 'string', 'in:pending,paid'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.product_id' => ['required', 'uuid', 'exists:products,id'],
+            'items.*.product_id' => ['nullable', 'string'], // Made nullable to allow new products
             'items.*.quantity_ordered' => ['required', 'integer', 'min:1'],
             'items.*.unit_cost' => ['required', 'numeric', 'min:0'],
             'items.*.tax' => ['nullable', 'numeric', 'min:0'],
@@ -67,10 +67,48 @@ class PurchaseOrderController extends Controller
             'total' => ['required', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string'],
             'meta' => ['nullable', 'array'],
+            'meta.new_products' => ['nullable', 'array'],
+            'meta.new_products.*.name' => ['required_with:meta.new_products', 'string'],
+            'meta.new_products.*.cost' => ['required_with:meta.new_products', 'numeric'],
         ]);
 
-        $po = DB::transaction(function () use ($validated) {
+        $po = DB::transaction(function () use ($validated, $request) {
             $items = collect($validated['items']);
+            $newProducts = collect($validated['meta']['new_products'] ?? []);
+            
+            // Create new products first (AS DRAFT)
+            $createdProducts = [];
+            foreach ($newProducts as $newProduct) {
+                $product = Product::create([
+                    'sku' => 'DRAFT-' . now()->format('YmdHis') . '-' . strtoupper(Str::random(4)),
+                    'name' => $newProduct['name'],
+                    'cost_price' => $newProduct['cost'],
+                    'selling_price' => $newProduct['cost'] * 1.2, // Default 20% markup
+                    'stock_quantity' => 0, // Will be updated when received
+                    'description' => $newProduct['description'] ?? null,
+                    'supplier_id' => $validated['supplier_id'],
+                    'status' => 'draft', // NEW: Mark as draft for review
+                    'is_active' => false, // Inactive until approved
+                    'reorder_level' => 5,
+                    'markup_percentage' => 20,
+                    'tax_rate' => 0,
+                ]);
+                $createdProducts[$newProduct['name']] = $product->id;
+            }
+
+            // Update items with newly created product IDs
+            $items = $items->map(function ($item) use ($createdProducts) {
+                // Check if this is a new product (ID starts with "new_")
+                if (isset($item['product_id']) && str_starts_with($item['product_id'], 'new_')) {
+                    // Extract product name from the ID (format: new_<ProductName>)
+                    $productName = substr($item['product_id'], 4);
+                    // Replace with actual created product ID
+                    if (isset($createdProducts[$productName])) {
+                        $item['product_id'] = $createdProducts[$productName];
+                    }
+                }
+                return $item;
+            });
 
             $po = PurchaseOrder::create([
                 'po_number' => 'PO-' . now()->format('Ymd') . '-' . strtoupper(Str::random(6)),
@@ -83,19 +121,23 @@ class PurchaseOrderController extends Controller
                 'total' => $validated['total'],
                 'notes' => $validated['notes'] ?? null,
                 'items' => $items->toArray(),
-                'meta' => $validated['meta'] ?? [],
+                'meta' => array_merge($validated['meta'] ?? [], [
+                    'auto_created_products' => $createdProducts,
+                ]),
             ]);
 
             // Attach products
             foreach ($items as $item) {
-                $po->products()->attach($item['product_id'], [
-                    'quantity_ordered' => $item['quantity_ordered'],
-                    'quantity_received' => 0,
-                    'unit_cost' => $item['unit_cost'],
-                    'tax' => $item['tax'] ?? 0,
-                    'line_total' => $item['line_total'],
-                    'description' => $item['description'] ?? null,
-                ]);
+                if ($item['product_id']) { // Only attach if we have a valid product ID
+                    $po->products()->attach($item['product_id'], [
+                        'quantity_ordered' => $item['quantity_ordered'],
+                        'quantity_received' => 0,
+                        'unit_cost' => $item['unit_cost'],
+                        'tax' => $item['tax'] ?? 0,
+                        'line_total' => $item['line_total'],
+                        'description' => $item['description'] ?? null,
+                    ]);
+                }
             }
 
             return $po;
@@ -191,12 +233,54 @@ class PurchaseOrderController extends Controller
             'items' => ['required', 'array'],
             'items.*.product_id' => ['required', 'uuid', 'exists:products,id'],
             'items.*.quantity_received' => ['required', 'integer', 'min:0'],
+            'approved_products' => ['nullable', 'array'],
+            'approved_products.*.product_id' => ['required', 'uuid', 'exists:products,id'],
+            'approved_products.*.selling_price' => ['required', 'numeric', 'min:0'],
+            'approved_products.*.markup_percentage' => ['nullable', 'numeric'],
+            'approved_products.*.brand' => ['nullable', 'string'],
+            'approved_products.*.model' => ['nullable', 'string'],
+            'approved_products.*.barcode' => ['nullable', 'string'],
+            'approved_products.*.category_id' => ['nullable', 'uuid', 'exists:categories,id'],
         ]);
 
         DB::transaction(function () use ($purchaseOrder, $validated, $request) {
+            // First, approve any draft products
+            if (!empty($validated['approved_products'])) {
+                foreach ($validated['approved_products'] as $approvedProduct) {
+                    $product = Product::findOrFail($approvedProduct['product_id']);
+                    
+                    if ($product->status === 'draft') {
+                        $product->update([
+                            'status' => 'active',
+                            'is_active' => true,
+                            'sku' => str_replace('DRAFT-', 'SKU-', $product->sku),
+                            'selling_price' => $approvedProduct['selling_price'],
+                            'markup_percentage' => $approvedProduct['markup_percentage'] ?? $product->markup_percentage,
+                            'brand' => $approvedProduct['brand'] ?? $product->brand,
+                            'model' => $approvedProduct['model'] ?? $product->model,
+                            'barcode' => $approvedProduct['barcode'] ?? $product->barcode,
+                            'category_id' => $approvedProduct['category_id'] ?? $product->category_id,
+                        ]);
+                    }
+                }
+            }
+
+            // Then proceed with receiving items
             foreach ($validated['items'] as $item) {
                 $product = Product::findOrFail($item['product_id']);
                 $quantityReceived = $item['quantity_received'];
+
+                // Auto-activate draft products when receiving stock - REMOVED
+                // We want to keep them as draft so the user can review them in the inventory page
+                /*
+                if ($product->status === 'draft') {
+                    $product->update([
+                        'status' => 'active',
+                        'is_active' => true,
+                        'sku' => str_replace('DRAFT-', 'SKU-', $product->sku),
+                    ]);
+                }
+                */
 
                 // Update pivot table
                 $purchaseOrder->products()->updateExistingPivot($item['product_id'], [
