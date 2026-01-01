@@ -35,6 +35,14 @@ class CustomerController extends Controller
                     ->orWhere('phone', 'like', "%{$term}%")
                     ->orWhere('company', 'like', "%{$term}%");
             })
+            ->when($request->has('exclude_suppliers'), function ($q) use ($request) {
+                if ($request->boolean('exclude_suppliers')) {
+                    $q->where(function($sq) {
+                        $sq->where('status', '!=', 'Supplier')
+                            ->orWhereNull('status');
+                    });
+                }
+            })
             ->withCount(['transactions', 'repairs'])
             ->withSum('transactions as total_spent', 'total');
 
