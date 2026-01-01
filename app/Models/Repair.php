@@ -105,4 +105,13 @@ class Repair extends Model
         return $query->where('promised_at', '<', now())
             ->whereNotIn('status', ['completed', 'cancelled']);
     }
+    /**
+     * Get the products (parts) used in this repair
+     */
+    public function products(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Product::class, 'product_repair')
+            ->withPivot('quantity', 'unit_price', 'total_price')
+            ->withTimestamps();
+    }
 }
