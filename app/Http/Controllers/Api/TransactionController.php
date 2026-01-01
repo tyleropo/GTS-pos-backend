@@ -62,6 +62,7 @@ class TransactionController extends Controller
             'payment_method' => ['required', 'string'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'uuid', 'exists:products,id'],
+            'items.*.product_name' => ['nullable', 'string'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
             'items.*.unit_price' => ['required', 'numeric', 'min:0'],
             'items.*.discount' => ['nullable', 'numeric', 'min:0'],
