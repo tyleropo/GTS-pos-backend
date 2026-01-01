@@ -38,15 +38,21 @@ class PaymentController extends Controller
     {
         $validated = $request->validate([
             'payable_id' => ['required', 'uuid'],
-            'payable_type' => ['required', 'string', 'in:purchase_order,customer_order,App\Models\PurchaseOrder,App\Models\CustomerOrder'],
+            'payable_type' => ['required', 'string', 'in:purchase_order,customer_order,App\\Models\\PurchaseOrder,App\\Models\\CustomerOrder'],
             'reference_number' => ['nullable', 'string', 'max:255'],
             'amount' => ['required', 'numeric', 'min:0'],
             'payment_method' => ['required', 'in:cash,cheque,bank_transfer,credit_card,online_wallet'],
-            'bank_name' => ['nullable', 'string', 'max:255', 'required_if:payment_method,cheque,bank_transfer,credit_card,online_wallet'],
-            'account_number' => ['nullable', 'string', 'max:255', 'required_if:payment_method,cheque,bank_transfer,credit_card,online_wallet'],
+            'bank_name' => ['nullable', 'string', 'max:255'],
+            'account_number' => ['nullable', 'string', 'max:255'],
             'date_received' => ['required', 'date'],
-            'is_deposited' => ['boolean'],
-            'date_deposited' => ['nullable', 'date', 'required_if:is_deposited,true'],
+            'is_deposited' => ['nullable', 'boolean'],
+            'date_deposited' => ['nullable', 'date'],
+            'status' => ['nullable', 'string'],
+            'is_consolidated' => ['nullable', 'boolean'],
+            'related_orders' => ['nullable', 'array'],
+            'related_orders.*.id' => ['required_with:related_orders', 'uuid'],
+            'related_orders.*.type' => ['required_with:related_orders', 'string', 'in:purchase_order,customer_order'],
+            'related_orders.*.amount' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string'],
         ]);
 
@@ -75,6 +81,39 @@ class PaymentController extends Controller
         }
 
         $payment = Payment::create($validated);
+        
+        // Update payment status for the orders
+        if ($validated['is_consolidated'] ?? false) {
+            // For consolidated payments, update all related orders
+            if (!empty($validated['related_orders'])) {
+                foreach ($validated['related_orders'] as $orderData) {
+                    $orderId = $orderData['id'];
+                    $orderType = $orderData['type'];
+                    
+                    if ($orderType === 'purchase_order') {
+                        $order = \App\Models\PurchaseOrder::find($orderId);
+                        if ($order) {
+                            $order->payment_status = 'paid';
+                            $order->save();
+                        }
+                    } elseif ($orderType === 'customer_order') {
+                        $order = \App\Models\CustomerOrder::find($orderId);
+                        if ($order) {
+                            $order->payment_status = 'paid';
+                            $order->save();
+                        }
+                    }
+                }
+            }
+        } else {
+            // For single payments, update the main payable order
+            $payable = $payment->payable;
+            if ($payable && method_exists($payable, 'setAttribute')) {
+                $payable->payment_status = 'paid';
+                $payable->save();
+            }
+        }
+        
         return response()->json($payment->load('payable'), 201);
     }
 
@@ -97,11 +136,12 @@ class PaymentController extends Controller
             'reference_number' => ['sometimes', 'nullable', 'string', 'max:255'],
             'amount' => ['sometimes', 'numeric', 'min:0'],
             'payment_method' => ['sometimes', 'in:cash,cheque,bank_transfer,credit_card,online_wallet'],
-            'bank_name' => ['sometimes', 'nullable', 'string', 'max:255'], // Not strictly required on update unless payment method changes, keeping loose
+            'bank_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'account_number' => ['sometimes', 'nullable', 'string', 'max:255'],
             'date_received' => ['sometimes', 'date'],
-            'is_deposited' => ['sometimes', 'boolean'],
-            'date_deposited' => ['nullable', 'date', 'required_if:is_deposited,true'],
+            'is_deposited' => ['sometimes', 'nullable', 'boolean'],
+            'date_deposited' => ['nullable', 'date'],
+            'status' => ['nullable', 'string'],
             'notes' => ['nullable', 'string'],
         ]);
 
@@ -130,7 +170,53 @@ class PaymentController extends Controller
      */
     public function destroy(Payment $payment)
     {
+        // Identify all affected orders to revert their status
+        $affectedOrders = [];
+
+        if ($payment->is_consolidated && !empty($payment->related_orders)) {
+            foreach ($payment->related_orders as $orderData) {
+                $affectedOrders[] = [
+                    'id' => $orderData['id'],
+                    'type' => $orderData['type']
+                ];
+            }
+        } else {
+            // Non-consolidated, single order
+            // Map full class name to simple type string if needed, or handle in loop
+            $type = null;
+            if ($payment->payable_type === 'App\Models\PurchaseOrder') {
+                $type = 'purchase_order';
+            } elseif ($payment->payable_type === 'App\Models\CustomerOrder') {
+                $type = 'customer_order';
+            }
+
+            if ($type) {
+                $affectedOrders[] = [
+                    'id' => $payment->payable_id,
+                    'type' => $type
+                ];
+            }
+        }
+
         $payment->delete();
+
+        // Revert statuses to 'pending'
+        // Ideally we would check for other payments here, but for now we default to pending
+        // so the user knows they need to verify payment status.
+        foreach ($affectedOrders as $orderInfo) {
+            $order = null;
+            if ($orderInfo['type'] === 'purchase_order') {
+                $order = \App\Models\PurchaseOrder::find($orderInfo['id']);
+            } elseif ($orderInfo['type'] === 'customer_order') {
+                $order = \App\Models\CustomerOrder::find($orderInfo['id']);
+            }
+
+            if ($order) {
+                $order->payment_status = 'pending';
+                $order->save();
+            }
+        }
+
         return response()->noContent();
     }
 }
