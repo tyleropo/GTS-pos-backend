@@ -31,6 +31,7 @@ class Product extends Model
         'max_stock_level',
         'image_url',
         'is_active',
+        'status',
     ];
 
     protected $casts = [
@@ -143,11 +144,35 @@ class Product extends Model
     }
 
     /**
-     * Scope to get only active products
+     * Scope to get only active products (by is_active flag)
      */
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
+    }
+
+    /**
+     * Scope to get products with active status
+     */
+    public function scopeStatusActive($query)
+    {
+        return $query->where('status', 'active');
+    }
+
+    /**
+     * Scope to get draft products
+     */
+    public function scopeDraft($query)
+    {
+        return $query->where('status', 'draft');
+    }
+
+    /**
+     * Scope to get discontinued products
+     */
+    public function scopeDiscontinued($query)
+    {
+        return $query->where('status', 'discontinued');
     }
 
     /**

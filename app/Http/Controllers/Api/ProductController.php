@@ -20,7 +20,9 @@ class ProductController extends Controller
                 });
             })
             ->when($request->category_id, fn ($q, $categoryId) => $q->where('category_id', $categoryId))
-            ->when($request->boolean('low_stock'), fn ($q) => $q->lowStock());
+            ->when($request->boolean('low_stock'), fn ($q) => $q->lowStock())
+            ->when($request->status, fn ($q, $status) => $q->where('status', $status))
+            ->when(!$request->boolean('include_drafts'), fn ($q) => $q->statusActive());
 
         $products = $query->paginate($request->integer('per_page', 24));
 
@@ -127,5 +129,71 @@ class ProductController extends Controller
         $category = \App\Models\Category::create($validated);
 
         return response()->json($category, 201);
+    }
+
+    public function approve(Product $product)
+    {
+        if ($product->status !== 'draft') {
+            return response()->json([
+                'message' => 'Only draft products can be approved'
+            ], 422);
+        }
+
+        $product->update([
+            'status' => 'active',
+            'is_active' => true,
+            'sku' => str_replace('DRAFT-', 'SKU-', $product->sku),
+        ]);
+
+        return response()->json($product->fresh()->load(['category', 'supplier']));
+    }
+
+    public function adjustStock(Request $request, Product $product)
+    {
+        $validated = $request->validate([
+            'type' => ['required', 'in:add,subtract,set'],
+            'quantity' => ['required', 'integer', 'min:0'],
+            'reason' => ['required', 'string'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        $oldStock = $product->stock_quantity;
+        $newStock = $oldStock;
+
+        switch ($validated['type']) {
+            case 'add':
+                $newStock = $oldStock + $validated['quantity'];
+                break;
+            case 'subtract':
+                $newStock = max(0, $oldStock - $validated['quantity']);
+                break;
+            case 'set':
+                $newStock = $validated['quantity'];
+                break;
+        }
+
+        $product->update(['stock_quantity' => $newStock]);
+
+        $product->stockMovements()->create([
+            'type' => 'adjustment',
+            'quantity' => $newStock - $oldStock,
+            'previous_stock' => $oldStock,
+            'new_stock' => $newStock,
+            'reason' => $validated['reason'],
+            'notes' => $validated['notes'],
+            'user_id' => auth()->id(),
+        ]);
+
+        return response()->json($product->fresh()->load(['category', 'supplier']));
+    }
+
+    public function archive(Product $product)
+    {
+        $product->update([
+            'status' => 'discontinued',
+            'is_active' => false,
+        ]);
+
+        return response()->json($product->fresh()->load(['category', 'supplier']));
     }
 }
