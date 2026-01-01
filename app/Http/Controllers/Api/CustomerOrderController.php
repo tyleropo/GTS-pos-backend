@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\CustomerOrder;
+use App\Models\CustomerOrderAdjustment;
 use App\Models\Product;
 use App\Models\StockMovement;
 use Illuminate\Http\Request;
@@ -14,7 +15,7 @@ class CustomerOrderController extends Controller
 {
     public function index(Request $request)
     {
-        $customerOrders = CustomerOrder::with(['customer', 'products', 'payments'])
+        $customerOrders = CustomerOrder::with(['customer', 'products', 'payments', 'adjustments'])
             ->when($request->status, fn ($q, $status) => $q->status($status))
             ->when($request->customer_id, fn ($q, $id) => $q->where('customer_id', $id))
             ->when($request->customer_ids, function ($q, $ids) {
@@ -41,8 +42,12 @@ class CustomerOrderController extends Controller
                     'tax' => $product->pivot->tax,
                     'line_total' => $product->pivot->line_total,
                     'description' => $product->pivot->description,
+                    'is_voided' => (bool)$product->pivot->is_voided,
+                    'void_reason' => $product->pivot->void_reason,
                 ];
             })->toArray();
+            
+            $coArray['adjustments'] = $co->adjustments;
             
             // Calculate payment totals
             $totalPaid = $co->payments->sum('amount');
@@ -130,7 +135,7 @@ class CustomerOrderController extends Controller
 
     public function show(CustomerOrder $customerOrder)
     {
-        $customerOrder->load(['customer', 'products', 'payments']);
+        $customerOrder->load(['customer', 'products', 'payments', 'adjustments']);
         
         $coArray = $customerOrder->toArray();
         
@@ -145,8 +150,12 @@ class CustomerOrderController extends Controller
                 'tax' => $product->pivot->tax,
                 'line_total' => $product->pivot->line_total,
                 'description' => $product->pivot->description,
+                'is_voided' => (bool)$product->pivot->is_voided,
+                'void_reason' => $product->pivot->void_reason,
             ];
         })->toArray();
+
+        $coArray['adjustments'] = $customerOrder->adjustments;
         
         // Calculate payment totals
         $totalPaid = $customerOrder->payments->sum('amount');
@@ -237,6 +246,13 @@ class CustomerOrderController extends Controller
         DB::transaction(function () use ($customerOrder, $validated, $request) {
             foreach ($validated['items'] as $item) {
                 $product = Product::findOrFail($item['product_id']);
+                
+                // Skip if this product line is voided in the order
+                $pivot = $customerOrder->products()->where('product_id', $item['product_id'])->first()?->pivot;
+                if ($pivot && $pivot->is_voided) {
+                    continue;
+                }
+
                 $quantityFulfilled = $item['quantity_fulfilled'];
 
                 // Update pivot table
@@ -244,7 +260,7 @@ class CustomerOrderController extends Controller
                     'quantity_fulfilled' => DB::raw("quantity_fulfilled + {$quantityFulfilled}"),
                 ]);
 
-                // DEDUCT product stock (this is the key difference from purchase orders)
+                // DEDUCT product stock
                 $oldStock = $product->stock_quantity;
                 $product->decrement('stock_quantity', $quantityFulfilled);
                 $newStock = $product->fresh()->stock_quantity;
@@ -265,6 +281,7 @@ class CustomerOrderController extends Controller
 
             // Check if fully fulfilled
             $fullyFulfilled = $customerOrder->products()
+                ->wherePivot('is_voided', false) // Only check active lines
                 ->get()
                 ->every(fn ($p) => $p->pivot->quantity_fulfilled >= $p->pivot->quantity_ordered);
 
@@ -290,5 +307,123 @@ class CustomerOrderController extends Controller
 
         $customerOrder->delete();
         return response()->noContent();
+    }
+
+    public function convertLineToCash(Request $request, CustomerOrder $customerOrder)
+    {
+        $validated = $request->validate([
+            'product_id' => 'required|uuid|exists:products,id',
+        ]);
+
+        $productId = $validated['product_id'];
+        
+        // Find the product line in this order
+        $product = $customerOrder->products()->where('product_id', $productId)->first();
+        
+        if (!$product) {
+            return response()->json(['message' => 'Product line not found in this order'], 404);
+        }
+        
+        if ($product->pivot->is_voided) {
+             return response()->json(['message' => 'Product line is already voided'], 400);
+        }
+
+        DB::transaction(function () use ($customerOrder, $product) {
+            // 1. Mark line as voided
+            $customerOrder->products()->updateExistingPivot($product->id, [
+                'is_voided' => true,
+                'void_reason' => 'Converted to Cash'
+            ]);
+
+            // 2. Create Adjustment
+            // We want to bill the FULL AMOUNT for this line even though it's voided.
+            // Since voiding removes it from subtotal/tax, we add it back as a positive adjustment.
+            // Adjustment Amount = Line Total + Line Tax
+            $adjustmentAmount = $product->pivot->line_total + $product->pivot->tax;
+            
+            CustomerOrderAdjustment::create([
+                'customer_order_id' => $customerOrder->id,
+                'type' => 'cash_payout',
+                'amount' => $adjustmentAmount,
+                'description' => "Cash converted for {$product->name} (Qty: {$product->pivot->quantity_ordered})",
+                'related_product_id' => $product->id,
+            ]);
+
+            // 3. Recalculate Totals
+            // Reload relations to get fresh data
+            $customerOrder->load(['products', 'adjustments']);
+            
+            // Subtotal = Sum of Non-Voided Line Totals + Sum of Adjustments
+            $activeProducts = $customerOrder->products->where('pivot.is_voided', false);
+            $subtotalProducts = $activeProducts->sum('pivot.line_total');
+            $subtotalAdjustments = $customerOrder->adjustments->sum('amount');
+            
+            $newSubtotal = $subtotalProducts + $subtotalAdjustments;
+            
+            // Tax = Sum of Non-Voided Line Tax only
+            $newTax = $activeProducts->sum('pivot.tax');
+            
+            $newTotal = $newSubtotal + $newTax;
+            
+            $customerOrder->update([
+                'subtotal' => $newSubtotal,
+                'tax' => $newTax,
+                'total' => $newTotal
+            ]);
+        });
+
+        return response()->json($customerOrder->fresh(['customer', 'products', 'payments', 'adjustments']));
+    }
+
+    public function revertLineToCash(Request $request, CustomerOrder $customerOrder)
+    {
+        $validated = $request->validate([
+            'product_id' => 'required|uuid|exists:products,id',
+        ]);
+
+        $productId = $validated['product_id'];
+        
+        // Find the product line in this order
+        $product = $customerOrder->products()->where('product_id', $productId)->first();
+        
+        if (!$product) {
+            return response()->json(['message' => 'Product line not found in this order'], 404);
+        }
+        
+        if (!$product->pivot->is_voided) {
+             return response()->json(['message' => 'Product line is not voided'], 400);
+        }
+
+        DB::transaction(function () use ($customerOrder, $product) {
+            // 1. Unmark line as voided
+            $customerOrder->products()->updateExistingPivot($product->id, [
+                'is_voided' => false,
+                'void_reason' => null
+            ]);
+
+            // 2. Delete related adjustment(s)
+            CustomerOrderAdjustment::where('customer_order_id', $customerOrder->id)
+                ->where('related_product_id', $product->id)
+                ->delete();
+
+            // 3. Recalculate Totals
+            $customerOrder->load(['products', 'adjustments']);
+            
+            $activeProducts = $customerOrder->products->where('pivot.is_voided', false);
+            $subtotalProducts = $activeProducts->sum('pivot.line_total');
+            $subtotalAdjustments = $customerOrder->adjustments->sum('amount');
+            
+            $newSubtotal = $subtotalProducts + $subtotalAdjustments;
+            $newTax = $activeProducts->sum('pivot.tax');
+            $newTotal = $newSubtotal + $newTax;
+            
+            $customerOrder->update([
+                'subtotal' => $newSubtotal,
+                'tax' => $newTax,
+                'total' => $newTotal
+            ]);
+        });
+
+        return response()->json($customerOrder->fresh(['customer', 'products', 'payments', 'adjustments']));
     }
 }
