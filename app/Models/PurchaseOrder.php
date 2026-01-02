@@ -19,6 +19,7 @@ class PurchaseOrder extends Model
         'status',
         'payment_status',
         'expected_at',
+        'payment_due_date',
         'subtotal',
         'tax',
         'total',
@@ -29,6 +30,7 @@ class PurchaseOrder extends Model
 
     protected $casts = [
         'expected_at' => 'datetime',
+        'payment_due_date' => 'datetime',
         'subtotal' => 'decimal:2',
         'tax' => 'decimal:2',
         'total' => 'decimal:2',
@@ -108,6 +110,20 @@ class PurchaseOrder extends Model
     }
 
     /**
+     * Check if payment is overdue (past due date and not fully paid)
+     */
+    public function isPaymentOverdue(): bool
+    {
+        if (!$this->payment_due_date) {
+            return false;
+        }
+        
+        return $this->payment_due_date->isPast() && 
+               $this->payment_status !== 'paid' &&
+               !$this->isCancelled();
+    }
+
+    /**
      * Check if PO is partially received
      */
     public function isPartiallyReceived(): bool
@@ -141,5 +157,15 @@ class PurchaseOrder extends Model
     public function scopePending($query)
     {
         return $query->where('status', 'submitted');
+    }
+
+    /**
+     * Scope to get purchase orders with overdue payments
+     */
+    public function scopePaymentOverdue($query)
+    {
+        return $query->where('payment_due_date', '<', now())
+            ->where('payment_status', '!=', 'paid')
+            ->whereNotIn('status', ['cancelled']);
     }
 }

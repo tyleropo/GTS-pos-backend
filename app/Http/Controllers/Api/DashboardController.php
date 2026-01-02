@@ -154,6 +154,24 @@ class DashboardController extends Controller
                 ],
             ]);
 
+        // Get PO payment due dates (non-cancelled, non-paid, with payment_due_date)
+        $poPaymentEvents = \App\Models\PurchaseOrder::with('supplier')
+            ->whereNotNull('payment_due_date')
+            ->whereNotIn('status', ['cancelled'])
+            ->where('payment_status', '!=', 'paid')
+            ->get()
+            ->map(fn ($po) => [
+                'id' => 'po-payment-' . $po->id,
+                'title' => $po->po_number . ' - ' . ($po->supplier?->company_name ?? 'Unknown'),
+                'start' => $po->payment_due_date->format('Y-m-d'),
+                'color' => '#f59e0b', // amber for payment due
+                'extendedProps' => [
+                    'type' => 'po-payment',
+                    'id' => $po->id,
+                    'status' => $po->payment_status,
+                ],
+            ]);
+
         // Get Customer Order dates (non-cancelled, with expected_at)
         $coEvents = \App\Models\CustomerOrder::with('customer')
             ->whereNotNull('expected_at')
@@ -187,7 +205,7 @@ class DashboardController extends Controller
                 ],
             ]);
 
-        return response()->json($poEvents->merge($coEvents)->merge($repairEvents)->values());
+        return response()->json($poEvents->merge($poPaymentEvents)->merge($coEvents)->merge($repairEvents)->values());
     }
     public function dailyTransactions()
     {
