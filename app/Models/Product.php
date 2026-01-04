@@ -48,6 +48,26 @@ class Product extends Model
     ];
 
     /**
+     * Get the full image URL
+     */
+    public function getImageUrlAttribute()
+    {
+        $value = $this->attributes['image_url'] ?? null;
+        
+        if (!$value) {
+            return null;
+        }
+
+        // If it's already a full URL, return it as-is
+        if (str_starts_with($value, 'http://') || str_starts_with($value, 'https://')) {
+            return $value;
+        }
+
+        // Otherwise, prepend the app URL
+        return url($value);
+    }
+
+    /**
      * Get the category this product belongs to
      */
     public function category(): BelongsTo
