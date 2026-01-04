@@ -189,14 +189,56 @@ class PurchaseOrderController extends Controller
             'total' => 'required|numeric',
             'notes' => 'nullable|string',
             'items' => 'required|array',
-            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.product_id' => 'nullable|string', // Made nullable to allow new products during update
             'items.*.quantity_ordered' => 'required|integer|min:1',
             'items.*.unit_cost' => 'required|numeric|min:0',
             'items.*.description' => 'nullable|string',
+            'items.*.line_total' => 'required|numeric|min:0', // Added for consistency
             'meta' => 'nullable|array',
+            'meta.new_products' => 'nullable|array',
+            'meta.new_products.*.name' => 'required_with:meta.new_products|string',
+            'meta.new_products.*.cost' => 'required_with:meta.new_products|numeric',
         ]);
 
+
         $updatedPurchaseOrder = DB::transaction(function () use ($validated, $purchaseOrder) {
+            $items = collect($validated['items']);
+            $newProducts = collect($validated['meta']['new_products'] ?? []);
+            
+            // Create new products first (AS DRAFT)
+            $createdProducts = [];
+            foreach ($newProducts as $newProduct) {
+                $product = Product::create([
+                    'sku' => 'DRAFT-' . now()->format('YmdHis') . '-' . strtoupper(Str::random(4)),
+                    'name' => $newProduct['name'],
+                    'cost_price' => $newProduct['cost'],
+                    'selling_price' => $newProduct['cost'] * 1.2, // Default 20% markup
+                    'stock_quantity' => 0, // Will be updated when received
+                    'description' => $newProduct['description'] ?? null,
+                    'supplier_id' => $validated['supplier_id'],
+                    'status' => 'draft', // Mark as draft for review
+                    'is_active' => false, // Inactive until approved
+                    'reorder_level' => 5,
+                    'markup_percentage' => 20,
+                    'tax_rate' => 0,
+                ]);
+                $createdProducts[$newProduct['name']] = $product->id;
+            }
+
+            // Update items with newly created product IDs
+            $items = $items->map(function ($item) use ($createdProducts) {
+                // Check if this is a new product (ID starts with "new_")
+                if (isset($item['product_id']) && str_starts_with($item['product_id'], 'new_')) {
+                    // Extract product name from the ID (format: new_<ProductName>)
+                    $productName = substr($item['product_id'], 4);
+                    // Replace with actual created product ID
+                    if (isset($createdProducts[$productName])) {
+                        $item['product_id'] = $createdProducts[$productName];
+                    }
+                }
+                return $item;
+            });
+
             $purchaseOrder->update([
                 'supplier_id' => $validated['supplier_id'],
                 'status' => $validated['status'],
@@ -207,20 +249,24 @@ class PurchaseOrderController extends Controller
                 'tax' => $validated['tax'],
                 'total' => $validated['total'],
                 'notes' => $validated['notes'] ?? null,
-                'meta' => $validated['meta'] ?? [],
+                'meta' => array_merge($validated['meta'] ?? [], [
+                    'auto_created_products' => $createdProducts,
+                ]),
             ]);
 
             $existingProducts = $purchaseOrder->products->keyBy('id');
             $syncData = [];
-            foreach ($validated['items'] as $item) {
-                $existingPivot = $existingProducts->get($item['product_id'])?->pivot;
-                $syncData[$item['product_id']] = [
-                    'quantity_ordered' => $item['quantity_ordered'],
-                    'unit_cost' => $item['unit_cost'],
-                    'line_total' => $item['quantity_ordered'] * $item['unit_cost'], // Recalculate or trust frontend? Trust frontend for now but ideally re-calc
-                    'description' => $item['description'] ?? null,
-                    'quantity_received' => $existingPivot ? $existingPivot->quantity_received : 0,
-                ];
+            foreach ($items as $item) {
+                if ($item['product_id']) { // Only sync if we have a valid product ID
+                    $existingPivot = $existingProducts->get($item['product_id'])?->pivot;
+                    $syncData[$item['product_id']] = [
+                        'quantity_ordered' => $item['quantity_ordered'],
+                        'unit_cost' => $item['unit_cost'],
+                        'line_total' => $item['line_total'] ?? ($item['quantity_ordered'] * $item['unit_cost']),
+                        'description' => $item['description'] ?? null,
+                        'quantity_received' => $existingPivot ? $existingPivot->quantity_received : 0,
+                    ];
+                }
             }
             
             $purchaseOrder->products()->sync($syncData);
