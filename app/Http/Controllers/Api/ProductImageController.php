@@ -24,8 +24,8 @@ class ProductImageController extends Controller
             // Store in public disk under products directory
             $path = $image->storeAs('products', $filename, 'public');
             
-            // Generate public URL
-            $url = Storage::disk('public')->url($path);
+            // Generate public URL using APP_URL from .env (important for LAN hosting)
+            $url = url('/storage/' . $path);
             
             return response()->json([
                 'url' => $url,
